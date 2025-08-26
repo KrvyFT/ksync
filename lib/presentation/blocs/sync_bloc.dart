@@ -198,7 +198,7 @@ class SyncBloc extends Bloc<SyncEvent, SyncState> {
     } catch (e) {
       final settingsRepository = await getIt.getAsync<SyncSettingsRepository>();
       final settings = await settingsRepository.getSyncSettings();
-      
+
       emit(SyncFailure(
         error: e.toString(),
         settings: settings,
@@ -208,14 +208,15 @@ class SyncBloc extends Bloc<SyncEvent, SyncState> {
 
   Future<void> _onStopSync(StopSync event, Emitter<SyncState> emit) async {
     await _progressSubscription?.cancel();
-    
+
     final settingsRepository = await getIt.getAsync<SyncSettingsRepository>();
     final settings = await settingsRepository.getSyncSettings();
-    
+
     emit(SyncSettingsLoaded(settings));
   }
 
-  void _onUpdateSyncProgress(UpdateSyncProgress event, Emitter<SyncState> emit) {
+  void _onUpdateSyncProgress(
+      UpdateSyncProgress event, Emitter<SyncState> emit) {
     if (state is SyncInProgress) {
       final currentState = state as SyncInProgress;
       emit(SyncInProgress(
@@ -245,7 +246,8 @@ class SyncBloc extends Bloc<SyncEvent, SyncState> {
     }
   }
 
-  Future<void> _onLoadSyncSettings(LoadSyncSettings event, Emitter<SyncState> emit) async {
+  Future<void> _onLoadSyncSettings(
+      LoadSyncSettings event, Emitter<SyncState> emit) async {
     try {
       final settingsRepository = await getIt.getAsync<SyncSettingsRepository>();
       final settings = await settingsRepository.getSyncSettings();
@@ -258,14 +260,15 @@ class SyncBloc extends Bloc<SyncEvent, SyncState> {
     }
   }
 
-  Future<void> _onUpdateSyncSettings(UpdateSyncSettings event, Emitter<SyncState> emit) async {
+  Future<void> _onUpdateSyncSettings(
+      UpdateSyncSettings event, Emitter<SyncState> emit) async {
     try {
       final settingsRepository = await getIt.getAsync<SyncSettingsRepository>();
       await settingsRepository.updateSyncSettings(event.settings);
-      
+
       // 更新调度
       await SyncScheduler.schedulePeriodicSync(event.settings);
-      
+
       emit(SyncSettingsLoaded(event.settings));
     } catch (e) {
       emit(SyncFailure(

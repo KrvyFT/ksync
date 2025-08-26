@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as path;
 
@@ -279,7 +278,8 @@ class SyncEngineUseCase {
 
     // 构建远程路径
     final relativePath = _getRelativePath(localPath, settings.syncDirectories);
-    final remotePath = '/$relativePath';
+    // 根据要求，将所有文件同步到服务器的 /Sync 目录下
+    final remotePath = path.join('/', relativePath);
 
     // 检查是否需要同步
     final existingMetadata =
