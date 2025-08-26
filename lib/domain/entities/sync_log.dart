@@ -1,10 +1,22 @@
 import 'package:equatable/equatable.dart';
+import 'package:hive/hive.dart';
+
+part 'sync_log.g.dart';
 
 /// 同步状态枚举
+
+@HiveType(typeId: 2)
 enum SyncStatus {
+  @HiveField(0) // 为每个枚举值添加 HiveField
   success,
+
+  @HiveField(1)
   failed,
+
+  @HiveField(2)
   canceled,
+
+  @HiveField(3)
   inProgress,
 }
 
@@ -80,8 +92,8 @@ class SyncLog extends Equatable {
     return SyncLog(
       jobId: json['jobId'] as String,
       startTime: DateTime.parse(json['startTime'] as String),
-      endTime: json['endTime'] != null 
-          ? DateTime.parse(json['endTime'] as String) 
+      endTime: json['endTime'] != null
+          ? DateTime.parse(json['endTime'] as String)
           : null,
       status: SyncStatus.values.firstWhere(
         (e) => e.name == json['status'],
