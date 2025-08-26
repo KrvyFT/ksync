@@ -47,27 +47,27 @@ class HomePage extends StatelessWidget {
                   _PermissionsBanner(),
                   // 首次引导（未配置时提示去设置）
                   if (state is SyncSettingsLoaded &&
-                      !(state as SyncSettingsLoaded).settings.isWebdavConfigured) ...[
+                      !(state).settings.isWebdavConfigured) ...[
                     _OnboardingBanner(),
                     const SizedBox(height: 16),
                   ],
 
                   // 同步状态卡片
                   SyncStatusCard(state: state),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // 同步进度卡片（仅在同步进行时显示）
                   if (state is SyncInProgress) ...[
                     SyncProgressCard(progress: state.progress),
                     const SizedBox(height: 16),
                   ],
-                  
+
                   // 快速操作
                   QuickActions(state: state),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // 同步历史按钮
                   Card(
                     child: ListTile(
@@ -85,9 +85,9 @@ class HomePage extends StatelessWidget {
                       },
                     ),
                   ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // 状态信息
                   if (state is SyncSuccess) ...[
                     Card(
@@ -122,9 +122,12 @@ class HomePage extends StatelessWidget {
                               const SizedBox(height: 4),
                               Text(
                                 '失败 ${state.syncLog.filesFailed} 个文件',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Colors.orange.shade700,
-                                ),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: Colors.orange.shade700,
+                                    ),
                               ),
                             ],
                             if (state.syncLog.duration != null) ...[
@@ -226,6 +229,8 @@ class _PermissionsBannerState extends State<_PermissionsBanner> {
 
   Future<void> _check() async {
     final ok = await PermissionsHelper.ensureStoragePermissions();
+    // ignore: avoid_print
+    print('权限检查结果: $ok');
     if (mounted) {
       setState(() => _granted = ok);
     }

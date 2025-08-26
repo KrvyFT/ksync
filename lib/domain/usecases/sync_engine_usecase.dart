@@ -65,18 +65,18 @@ class SyncEngineUseCase {
     SyncProgressCallback? onProgress,
   }) async {
     final settings = await _syncSettingsRepository.getSyncSettings();
-    
+
     if (!settings.isWebdavConfigured) {
       throw Exception('WebDAV 未配置');
     }
-    
+
     if (!settings.hasSyncDirectories) {
       throw Exception('未选择同步目录');
     }
 
     final jobId = _generateJobId();
     final startTime = DateTime.now();
-    
+
     // 创建同步日志
     final syncLog = SyncLog(
       jobId: jobId,
@@ -84,9 +84,9 @@ class SyncEngineUseCase {
       status: SyncStatus.inProgress,
       filesSynced: 0,
       filesFailed: 0,
-      errorMessages: [],
+      errorMessages: const [],
     );
-    
+
     await _syncLogRepository.saveSyncLog(syncLog);
 
     try {
@@ -95,7 +95,7 @@ class SyncEngineUseCase {
       if (password == null) {
         throw Exception('WebDAV 密码未设置');
       }
-      
+
       await _webdavRepository.connect(
         settings.webdavUrl!,
         settings.username!,
@@ -116,11 +116,10 @@ class SyncEngineUseCase {
         filesFailed: result.filesFailed,
         errorMessages: result.errorMessages,
       );
-      
+
       await _syncLogRepository.updateSyncLog(updatedSyncLog);
-      
+
       return updatedSyncLog;
-      
     } catch (e) {
       // 更新同步日志为失败状态
       final updatedSyncLog = syncLog.copyWith(
@@ -128,9 +127,9 @@ class SyncEngineUseCase {
         status: SyncStatus.failed,
         errorMessages: [e.toString()],
       );
-      
+
       await _syncLogRepository.updateSyncLog(updatedSyncLog);
-      
+
       rethrow;
     } finally {
       // 断开 WebDAV 连接
@@ -165,7 +164,7 @@ class SyncEngineUseCase {
     // 处理新增和修改的文件
     for (int i = 0; i < allFiles.length; i++) {
       final file = allFiles[i];
-      
+
       try {
         onProgress?.call(SyncProgress(
           currentFile: file,
@@ -196,10 +195,11 @@ class SyncEngineUseCase {
   }
 
   /// 扫描目录获取所有文件
-  Future<List<String>> _scanDirectory(String directory, List<String> excludePatterns) async {
+  Future<List<String>> _scanDirectory(
+      String directory, List<String> excludePatterns) async {
     final files = <String>[];
     final dir = Directory(directory);
-    
+
     if (!await dir.exists()) {
       return files;
     }
@@ -207,12 +207,12 @@ class SyncEngineUseCase {
     await for (final entity in dir.list(recursive: true)) {
       if (entity is File) {
         final relativePath = path.relative(entity.path, from: directory);
-        
+
         // 检查是否被排除
         if (_shouldExclude(relativePath, excludePatterns)) {
           continue;
         }
-        
+
         files.add(entity.path);
       }
     }
@@ -237,7 +237,7 @@ class SyncEngineUseCase {
       final regex = pattern.replaceAll('*', '.*');
       return RegExp(regex).hasMatch(filePath);
     }
-    
+
     return filePath.contains(pattern);
   }
 
@@ -252,10 +252,10 @@ class SyncEngineUseCase {
         try {
           // 删除远程文件
           await _webdavRepository.delete(metadata.remotePath);
-          
+
           // 删除本地元数据
           await _fileMetadataRepository.deleteFileMetadata(metadata.localPath);
-          
+
           deletedCount++;
         } catch (e) {
           // 记录错误但继续处理其他文件
@@ -276,18 +276,20 @@ class SyncEngineUseCase {
 
     final fileStat = await file.stat();
     final contentHash = await _calculateFileHash(localPath);
-    
+
     // 构建远程路径
     final relativePath = _getRelativePath(localPath, settings.syncDirectories);
     final remotePath = '/$relativePath';
 
     // 检查是否需要同步
-    final existingMetadata = await _fileMetadataRepository.getFileMetadataByLocalPath(localPath);
-    
+    final existingMetadata =
+        await _fileMetadataRepository.getFileMetadataByLocalPath(localPath);
+
     if (existingMetadata != null) {
       // 检查文件是否已修改
       if (existingMetadata.size == fileStat.size &&
-          existingMetadata.lastModifiedTimestamp == fileStat.modified.millisecondsSinceEpoch &&
+          existingMetadata.lastModifiedTimestamp ==
+              fileStat.modified.millisecondsSinceEpoch &&
           existingMetadata.contentHash == contentHash) {
         // 文件未修改，跳过
         return true;

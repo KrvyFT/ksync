@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:workmanager/workmanager.dart';
 
 import 'core/di/injection.dart';
-import 'core/background/background_task_handler.dart';
 import 'core/background/sync_scheduler.dart';
 import 'presentation/blocs/sync_bloc.dart';
 import 'presentation/pages/home_page.dart';
@@ -12,13 +10,13 @@ import 'presentation/pages/sync_history_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // 初始化依赖注入
   await configureDependencies();
-  
+
   // 初始化后台任务
   await SyncScheduler.initialize();
-  
+
   runApp(const WebDavSyncApp());
 }
 

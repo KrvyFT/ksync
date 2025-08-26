@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../blocs/sync_bloc.dart';
 import '../../domain/entities/sync_settings.dart';
@@ -34,9 +33,10 @@ class SyncStatusCard extends StatelessWidget {
                     children: [
                       Text(
                         _getStatusTitle(),
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
                       ),
                       Text(
                         _getStatusSubtitle(),
@@ -142,7 +142,7 @@ class SyncStatusCard extends StatelessWidget {
   Widget _buildConfigurationInfo(BuildContext context) {
     if (state is SyncSettingsLoaded) {
       final settings = (state as SyncSettingsLoaded).settings;
-      
+
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -165,7 +165,7 @@ class SyncStatusCard extends StatelessWidget {
         ],
       );
     }
-    
+
     return const SizedBox.shrink();
   }
 

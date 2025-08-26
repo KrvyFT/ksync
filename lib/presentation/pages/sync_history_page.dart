@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/entities/sync_log.dart';
 import '../../core/di/injection.dart';
@@ -32,7 +31,7 @@ class _SyncHistoryPageState extends State<SyncHistoryPage> {
     try {
       final syncLogRepository = await getIt.getAsync<SyncLogRepository>();
       final logs = await syncLogRepository.getRecentSyncLogs(50);
-      
+
       setState(() {
         _syncLogs = logs;
         _isLoading = false;
@@ -224,7 +223,7 @@ class _SyncHistoryPageState extends State<SyncHistoryPage> {
 
   String _formatDateTime(DateTime dateTime) {
     return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} '
-           '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+        '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 
   String _formatDuration(Duration duration) {
@@ -253,7 +252,8 @@ class _SyncHistoryPageState extends State<SyncHistoryPage> {
                 _buildDetailRow('耗时', _formatDuration(syncLog.duration!)),
               _buildDetailRow('成功文件', '${syncLog.filesSynced}'),
               _buildDetailRow('失败文件', '${syncLog.filesFailed}'),
-              _buildDetailRow('成功率', '${(syncLog.successRate * 100).toStringAsFixed(1)}%'),
+              _buildDetailRow(
+                  '成功率', '${(syncLog.successRate * 100).toStringAsFixed(1)}%'),
               if (syncLog.errorMessages.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 const Text(
@@ -262,12 +262,12 @@ class _SyncHistoryPageState extends State<SyncHistoryPage> {
                 ),
                 const SizedBox(height: 8),
                 ...syncLog.errorMessages.map((error) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    '• $error',
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                )),
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        '• $error',
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    )),
               ],
             ],
           ),

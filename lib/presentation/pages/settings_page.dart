@@ -20,7 +20,7 @@ class _SettingsPageState extends State<SettingsPage> {
   final _webdavUrlController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  
+
   SyncSettings? _currentSettings;
   bool _isLoading = false;
   bool _isTestingConnection = false;
@@ -47,7 +47,7 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final settingsRepository = await getIt.getAsync<SyncSettingsRepository>();
       final settings = await settingsRepository.getSyncSettings();
-      
+
       setState(() {
         _currentSettings = settings;
         _webdavUrlController.text = settings.webdavUrl ?? '';
@@ -110,8 +110,8 @@ class _SettingsPageState extends State<SettingsPage> {
             Text(
               'WebDAV 连接',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: 16),
             TextFormField(
@@ -194,8 +194,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 Text(
                   '同步目录',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const Spacer(),
                 TextButton.icon(
@@ -217,8 +217,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               )
             else
-              ...(_currentSettings?.syncDirectories.map((directory) => 
-                _buildDirectoryItem(directory)) ?? []),
+              ...(_currentSettings?.syncDirectories
+                      .map((directory) => _buildDirectoryItem(directory)) ??
+                  []),
           ],
         ),
       ),
@@ -231,7 +232,7 @@ class _SettingsPageState extends State<SettingsPage> {
       child: ListTile(
         leading: const Icon(Icons.folder),
         title: Text(directory),
-        subtitle: Text('本地目录'),
+        subtitle: const Text('本地目录'),
         trailing: IconButton(
           icon: const Icon(Icons.delete),
           onPressed: () => _removeSyncDirectory(directory),
@@ -250,8 +251,8 @@ class _SettingsPageState extends State<SettingsPage> {
             Text(
               '同步选项',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<SyncFrequency>(
@@ -341,8 +342,8 @@ class _SettingsPageState extends State<SettingsPage> {
             Text(
               '高级选项',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: 16),
             SwitchListTile(
@@ -421,7 +422,8 @@ class _SettingsPageState extends State<SettingsPage> {
       final result = await FilePicker.platform.getDirectoryPath();
       if (result != null) {
         setState(() {
-          final directories = List<String>.from(_currentSettings?.syncDirectories ?? []);
+          final directories =
+              List<String>.from(_currentSettings?.syncDirectories ?? []);
           if (!directories.contains(result)) {
             directories.add(result);
             _currentSettings = _currentSettings?.copyWith(
@@ -439,7 +441,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _removeSyncDirectory(String directory) {
     setState(() {
-      final directories = List<String>.from(_currentSettings?.syncDirectories ?? []);
+      final directories =
+          List<String>.from(_currentSettings?.syncDirectories ?? []);
       directories.remove(directory);
       _currentSettings = _currentSettings?.copyWith(
         syncDirectories: directories,
@@ -458,7 +461,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     try {
       final settingsRepository = await getIt.getAsync<SyncSettingsRepository>();
-      
+
       // 更新 WebDAV 连接信息
       await settingsRepository.setWebdavUrl(_webdavUrlController.text);
       await settingsRepository.setUsername(_usernameController.text);
