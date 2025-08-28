@@ -8,6 +8,7 @@ import '../../core/di/injection.dart';
 import '../../domain/repositories/sync_settings_repository.dart';
 import '../../core/utils/permissions.dart';
 import 'log_viewer_page.dart';
+import 'file_explorer_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -382,6 +383,18 @@ class _SettingsPageState extends State<SettingsPage> {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const LogViewerPage()),
+            );
+          },
+        ),
+        ListTile(
+          title: const Text('浏览服务器文件'),
+          subtitle: const Text('直接查看云端文件'),
+          leading: const Icon(Icons.cloud_outlined),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) => const FileExplorerPage()),
             );
           },
         ),

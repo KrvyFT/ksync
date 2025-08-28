@@ -66,7 +66,7 @@ Future<void> configureDependencies() async {
   }
 
   if (!getIt.isRegistered<WebdavRepository>()) {
-    getIt.registerSingleton<WebdavRepository>(WebdavRepositoryImpl());
+    getIt.registerLazySingleton<WebdavRepository>(() => WebdavRepositoryImpl());
   }
 
   // 用例
