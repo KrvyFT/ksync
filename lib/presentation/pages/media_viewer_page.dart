@@ -87,48 +87,65 @@ class _MediaViewerPageState extends State<MediaViewerPage> {
               },
             ),
             // --- UI Overlay ---
-            if (_isUiVisible)
-              Column(
-                children: [
-                  AppBar(
-                    backgroundColor: Colors.black.withOpacity(0.5),
-                    title: ValueListenableBuilder<int>(
-                      valueListenable: _currentPageNotifier,
-                      builder: (context, value, child) {
-                        return Text(
-                          widget.mediaFiles[value].name,
-                          style: const TextStyle(fontSize: 16),
-                        );
-                      },
-                    ),
-                    leading: const BackButton(),
-                    actions: [
-                      IconButton(
-                        icon: const Icon(Icons.fullscreen),
-                        onPressed: _toggleUiVisibility,
-                        tooltip: 'Toggle Fullscreen',
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Container(
-                    color: Colors.black.withOpacity(0.5),
-                    padding: const EdgeInsets.all(8.0),
-                    child: ValueListenableBuilder<int>(
-                       valueListenable: _currentPageNotifier,
-                       builder: (context, value, child) {
-                          return Text(
-                            '${value + 1} / ${widget.mediaFiles.length}',
-                            style: const TextStyle(color: Colors.white, fontSize: 16),
-                          );
-                       },
-                    ),
-                  )
-                ],
-              ),
+            _buildAnimatedUiOverlay(),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAnimatedUiOverlay() {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      transitionBuilder: (child, animation) {
+        return FadeTransition(opacity: animation, child: child);
+      },
+      child: _isUiVisible
+          ? Column(
+              key: const ValueKey('ui-visible'),
+              children: [
+                AppBar(
+                  backgroundColor: Colors.black.withOpacity(0.6),
+                  title: ValueListenableBuilder<int>(
+                    valueListenable: _currentPageNotifier,
+                    builder: (context, value, child) {
+                      return Text(
+                        widget.mediaFiles[value].name,
+                        style: const TextStyle(fontSize: 16, color: Colors.white),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      );
+                    },
+                  ),
+                  leading: const BackButton(color: Colors.white),
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.fullscreen, color: Colors.white),
+                      onPressed: _toggleUiVisibility,
+                      tooltip: 'Toggle Fullscreen',
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Container(
+                  width: double.infinity,
+                  color: Colors.black.withOpacity(0.6),
+                  padding: const EdgeInsets.symmetric(vertical: 16.0),
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: _currentPageNotifier,
+                    builder: (context, value, child) {
+                      return Text(
+                        '${value + 1} / ${widget.mediaFiles.length}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 16),
+                      );
+                    },
+                  ),
+                )
+              ],
+            )
+          : const SizedBox.shrink(key: ValueKey('ui-hidden')),
     );
   }
 }
