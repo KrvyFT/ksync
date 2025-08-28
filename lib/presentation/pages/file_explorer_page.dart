@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:get_it/get_it.dart';
 import 'package:path/path.dart' as p;
 
+import '../../domain/repositories/sync_settings_repository.dart';
 import '../blocs/file_explorer_bloc.dart';
+import 'media_viewer_page.dart';
 
 class FileExplorerPage extends StatelessWidget {
   const FileExplorerPage({super.key});
@@ -90,6 +93,8 @@ class FileExplorerPage extends StatelessWidget {
                         context
                             .read<FileExplorerBloc>()
                             .add(NavigateToPath(file.path));
+                      } else {
+                        _handleFileTap(context, file);
                       }
                     },
                   );
@@ -102,6 +107,49 @@ class FileExplorerPage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _handleFileTap(BuildContext context, file) async {
+    if (_isMediaFile(file.path)) {
+      try {
+        final settingsRepo = await GetIt.instance.getAsync<SyncSettingsRepository>();
+        final settings = await settingsRepo.getSyncSettings();
+        final password = await settingsRepo.getPassword();
+
+        if (settings.isWebdavConfigured && password != null && settings.username != null) {
+          // Note: This might not handle all edge cases for URL encoding, but works for many servers.
+          final fileUrl = Uri.encodeFull('${settings.webdavUrl}${file.path}');
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MediaViewerPage(
+                filePath: file.path,
+                fileUrl: fileUrl,
+                username: settings.username!,
+                password: password,
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('WebDAV is not configured or username/password is missing.')),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open file: $e')),
+        );
+      }
+    }
+    // You could add handlers for other file types here
+  }
+
+  bool _isMediaFile(String path) {
+    final extension = p.extension(path).toLowerCase();
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+    const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.flv'];
+    return imageExtensions.contains(extension) ||
+        videoExtensions.contains(extension);
   }
 
   String _formatSize(int bytes) {
