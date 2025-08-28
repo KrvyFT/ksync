@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as path;
 
-
 import '../entities/file_metadata.dart';
 import '../entities/sync_log.dart';
 import '../entities/sync_settings.dart';
@@ -163,7 +162,7 @@ class SyncEngineUseCase {
     }
   }
 
-  /// 执行具体的同步逻辑
+  /// 执行具体的同步逻辑 (单向上传, 带服务器检查)
   Future<SyncResult> _performSync({
     required SyncSettings settings,
     SyncProgressCallback? onProgress,
@@ -193,9 +192,9 @@ class SyncEngineUseCase {
     filesSyncedCount += deletedFilePaths.length;
     syncedFiles.addAll(deletedFilePaths);
 
-    void reportProgress() {
+    void reportProgress(String currentStep) {
       onProgress?.call(SyncProgress(
-        currentFile: '', // Not ideal, maybe show multiple files
+        currentFile: currentStep,
         currentFileIndex: filesProcessed,
         totalFiles: allFiles.length,
         filesSynced: filesSyncedCount,
@@ -211,20 +210,17 @@ class SyncEngineUseCase {
 
     Future<void> processFile(String file) async {
       try {
-        final result = await _syncFile(
-          file,
-          settings,
-          onUploadProgress: (bytesSent, totalBytes) {
-            uploadingFiles[file] = bytesSent / totalBytes;
-            reportProgress();
-          },
-        );
+        final result = await _syncFile(file, settings,
+            onUploadProgress: (bytesSent, totalBytes) {
+          uploadingFiles[file] = bytesSent / totalBytes;
+          reportProgress('正在上传...');
+        });
         if (result) {
           filesSyncedCount++;
           syncedFiles.add(file);
         } else {
-          filesFailedCount++;
-          failedFiles[file] = '未知错误';
+          // If syncFile returns false, it means the file was skipped (already up-to-date)
+          // We don't count it as a failure, just move on.
         }
       } catch (e) {
         filesFailedCount++;
@@ -233,7 +229,7 @@ class SyncEngineUseCase {
       } finally {
         filesProcessed++;
         uploadingFiles.remove(file);
-        reportProgress();
+        reportProgress('正在检查文件...');
       }
     }
 
@@ -242,11 +238,8 @@ class SyncEngineUseCase {
         final fileToProcess = fileQueue.removeAt(0);
         final future = processFile(fileToProcess);
         activeFutures.add(future);
-        future.whenComplete(() {
-          activeFutures.remove(future);
-        });
+        future.whenComplete(() => activeFutures.remove(future));
       }
-
       if (activeFutures.isNotEmpty) {
         await Future.any(activeFutures);
       }
@@ -358,22 +351,35 @@ class SyncEngineUseCase {
 
     // 构建远程路径
     final relativePath = _getRelativePath(localPath, settings.syncDirectories);
-    // 根据要求，将所有文件同步到服务器的 /Sync 目录下
-    final remotePath = path.join('/', relativePath);
+    if (relativePath == null) {
+      // This case should ideally not be reached if logic is correct
+      throw Exception("Could not determine relative path for $localPath");
+    }
+    final remotePath = path.join('/Sync', relativePath);
 
     // 检查是否需要同步
     final existingMetadata =
         await _fileMetadataRepository.getFileMetadataByLocalPath(localPath);
 
+    bool needsUpload = true;
     if (existingMetadata != null) {
-      // 检查文件是否已修改
+      // If metadata exists, check if file is unchanged
       if (existingMetadata.size == fileStat.size &&
           existingMetadata.lastModifiedTimestamp ==
               fileStat.modified.millisecondsSinceEpoch &&
           existingMetadata.contentHash == contentHash) {
-        // 文件未修改，跳过
-        return true;
+        // File is unchanged according to local metadata.
+        // NOW, VERIFY IT EXISTS ON THE SERVER.
+        final serverFileExists = await _webdavRepository.exists(remotePath);
+        if (serverFileExists) {
+          needsUpload = false; // Skip upload
+        }
+        // If it doesn't exist on server, needsUpload remains true (force upload)
       }
+    }
+
+    if (!needsUpload) {
+      return false; // Return false to indicate skipped
     }
 
     // 确保远程目录存在
@@ -410,13 +416,20 @@ class SyncEngineUseCase {
   }
 
   /// 获取相对路径
-  String _getRelativePath(String filePath, List<String> syncDirectories) {
+  String? _getRelativePath(String filePath, List<String> syncDirectories) {
     for (final directory in syncDirectories) {
-      if (filePath.startsWith(directory)) {
-        return path.relative(filePath, from: directory);
+      if (path.isWithin(directory, filePath)) {
+        // Get the base directory name (e.g., 'Photos')
+        final baseDirName = path.basename(directory);
+        // Get the path relative to the sync directory (e.g., '2023/summer.jpg')
+        final relativePathWithinSyncDir =
+            path.relative(filePath, from: directory);
+        // Join them to create the full remote relative path (e.g., 'Photos/2023/summer.jpg')
+        return path.join(baseDirName, relativePathWithinSyncDir);
       }
     }
-    return path.basename(filePath);
+    // Return null if the file is not within any sync directory.
+    return null;
   }
 
   /// 生成任务ID

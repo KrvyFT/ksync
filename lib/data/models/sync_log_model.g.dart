@@ -24,13 +24,15 @@ class SyncLogModelAdapter extends TypeAdapter<SyncLogModel> {
       filesSynced: fields[4] as int,
       filesFailed: fields[5] as int,
       errorMessages: (fields[6] as List).cast<String>(),
+      syncedFiles: (fields[7] as List).cast<String>(),
+      failedFiles: (fields[8] as Map).cast<String, String>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, SyncLogModel obj) {
     writer
-      ..writeByte(7)
+      ..writeByte(9)
       ..writeByte(0)
       ..write(obj.jobId)
       ..writeByte(1)
@@ -44,7 +46,11 @@ class SyncLogModelAdapter extends TypeAdapter<SyncLogModel> {
       ..writeByte(5)
       ..write(obj.filesFailed)
       ..writeByte(6)
-      ..write(obj.errorMessages);
+      ..write(obj.errorMessages)
+      ..writeByte(7)
+      ..write(obj.syncedFiles)
+      ..writeByte(8)
+      ..write(obj.failedFiles);
   }
 
   @override

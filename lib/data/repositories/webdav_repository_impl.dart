@@ -2,9 +2,7 @@ import 'dart:io' as io;
 import 'dart:typed_data' show Uint8List;
 import 'package:webdav_client/webdav_client.dart' as wd;
 import 'package:path/path.dart' as p;
-import 'package:http/http.dart' as http;
 import 'dart:async';
-import 'dart:convert';
 
 import '../../domain/repositories/webdav_repository.dart';
 
@@ -17,29 +15,20 @@ class WebdavRepositoryImpl implements WebdavRepository {
 
   @override
   Future<void> connect(String url, String username, String password) async {
-    // 如果已经连接到相同的服务器，不需要重新连接
     if (_client != null &&
         _currentUrl == url &&
         _currentUsername == username &&
         _currentPassword == password) {
       return;
     }
-
-    // 断开现有连接
     await disconnect();
-
     try {
-      // 创建新的客户端连接
       _client = wd.newClient(
         url,
         user: username,
         password: password,
       );
-
-      // 测试连接
       await _client!.readDir('/');
-
-      // 保存连接信息
       _currentUrl = url;
       _currentUsername = username;
       _currentPassword = password;
@@ -63,7 +52,6 @@ class WebdavRepositoryImpl implements WebdavRepository {
   @override
   Future<bool> testConnection() async {
     if (_client == null) return false;
-
     try {
       await _client!.readDir('/');
       return true;
@@ -75,7 +63,6 @@ class WebdavRepositoryImpl implements WebdavRepository {
   @override
   Future<List<WebdavFileInfo>> listDirectory(String path) async {
     _ensureConnected();
-
     try {
       final items = await _client!.readDir(path);
       return items
@@ -95,7 +82,6 @@ class WebdavRepositoryImpl implements WebdavRepository {
   @override
   Future<void> createDirectory(String path) async {
     _ensureConnected();
-
     try {
       await _client!.mkdir(path);
     } catch (e) {
@@ -106,18 +92,15 @@ class WebdavRepositoryImpl implements WebdavRepository {
   @override
   Future<void> createDirectoryRecursive(String path) async {
     _ensureConnected();
-
     try {
       final pathParts =
           path.split('/').where((part) => part.isNotEmpty).toList();
       String currentPath = '';
-
       for (final part in pathParts) {
         currentPath += '/$part';
         try {
           await _client!.mkdir(currentPath);
         } catch (e) {
-          // 如果目录已存在，忽略错误
           if (!e.toString().contains('already exists')) {
             rethrow;
           }
@@ -135,59 +118,20 @@ class WebdavRepositoryImpl implements WebdavRepository {
     UploadProgressCallback? onProgress,
   ) async {
     _ensureConnected();
-
     try {
       final file = io.File(localPath);
       if (!await file.exists()) {
         throw Exception('本地文件不存在: $localPath');
       }
-
-      final fileLength = await file.length();
-      final remoteUrl = Uri.parse(_currentUrl!).replace(path: remotePath);
-
-      // 手动构建 Basic Auth
-      final basicAuth = base64Encode(utf8.encode('$_currentUsername:$_currentPassword'));
-
-      final request = http.StreamedRequest('PUT', remoteUrl);
-      request.headers['Authorization'] = 'Basic $basicAuth';
-      request.headers['Content-Length'] = fileLength.toString();
-
-      int bytesSent = 0;
-      final fileStream = file.openRead();
-
-      final stream = fileStream.transform<List<int>>(
-        StreamTransformer.fromHandlers(
-          handleData: (data, sink) {
-            bytesSent += data.length;
-            onProgress?.call(bytesSent, fileLength);
-            sink.add(data);
-          },
-        ),
-      );
-
-      request.contentLength = fileLength;
-
-      final client = http.Client();
-      try {
-        // Pipe the stream to the request sink. This doesn't block.
-        stream.pipe(request.sink);
-
-        // Send the request and wait for the response.
-        final response = await client.send(request);
-
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          // Success, drain the stream to prevent resource leaks.
-          await response.stream.drain();
-        } else {
-          final body = await response.stream.bytesToString();
-          throw Exception(
-              '上传文件失败: ${response.statusCode} ${response.reasonPhrase}. Body: $body');
-        }
-      } finally {
-        client.close();
+      final remoteDir = p.dirname(remotePath);
+      if (remoteDir.isNotEmpty && remoteDir != '/' && remoteDir != '.') {
+        await createDirectoryRecursive(remoteDir);
       }
+      await _client!
+          .writeFromFile(localPath, remotePath, onProgress: onProgress);
     } catch (e) {
-      throw Exception('上传文件��败: $e');
+      print('Upload failed for $localPath -> $remotePath. Error: $e');
+      throw Exception('上传文件失败: $e');
     }
   }
 
@@ -198,18 +142,13 @@ class WebdavRepositoryImpl implements WebdavRepository {
     DownloadProgressCallback? onProgress,
   ) async {
     _ensureConnected();
-
     try {
-      // 确保本地目录存在
       final localDir = p.dirname(localPath);
       final localDirectory = io.Directory(localDir);
       if (!await localDirectory.exists()) {
         await localDirectory.create(recursive: true);
       }
-
-      // 下载文件
-      // webdav_client 1.x 没有 readToFile；使用 read 将内容写入本地
-      final bytes = await _client!.read(remotePath);
+      final bytes = await _client!.read(remotePath, onProgress: onProgress);
       final f = io.File(localPath);
       await f.writeAsBytes(bytes);
     } catch (e) {
@@ -220,7 +159,6 @@ class WebdavRepositoryImpl implements WebdavRepository {
   @override
   Future<void> delete(String path) async {
     _ensureConnected();
-
     try {
       await _client!.remove(path);
     } catch (e) {
@@ -231,8 +169,8 @@ class WebdavRepositoryImpl implements WebdavRepository {
   @override
   Future<bool> exists(String path) async {
     _ensureConnected();
-
     try {
+      // readDir is a reliable way to check for existence in v1.2.2
       await _client!.readDir(path);
       return true;
     } catch (e) {
@@ -243,11 +181,9 @@ class WebdavRepositoryImpl implements WebdavRepository {
   @override
   Future<WebdavFileInfo?> getFileInfo(String path) async {
     _ensureConnected();
-
     try {
       final items = await _client!.readDir(path);
       if (items.isEmpty) return null;
-
       final item = items.first;
       return WebdavFileInfo(
         path: item.path ?? '',
@@ -264,12 +200,10 @@ class WebdavRepositoryImpl implements WebdavRepository {
   @override
   Future<void> move(String sourcePath, String destinationPath) async {
     _ensureConnected();
-
     try {
-      // webdav_client 1.x 无 move，采用 copy+remove 近似处理
-      final data2 = await _client!.read(sourcePath);
-      await _client!.write(destinationPath, Uint8List.fromList(data2));
-      await _client!.remove(sourcePath);
+      // v1.2.2 doesn't have a reliable move, so we copy then delete
+      await copy(sourcePath, destinationPath);
+      await delete(sourcePath);
     } catch (e) {
       throw Exception('移动文件失败: $e');
     }
@@ -278,12 +212,9 @@ class WebdavRepositoryImpl implements WebdavRepository {
   @override
   Future<void> copy(String sourcePath, String destinationPath) async {
     _ensureConnected();
-
     try {
-      // webdav_client 1.x 的 copy 接口签名不一致，这里以读写方式实现复制
       final data = await _client!.read(sourcePath);
-      await _client!
-          .write(destinationPath, Uint8List.fromList(data)); // <-- 就是把 'io.' 去掉
+      await _client!.write(destinationPath, Uint8List.fromList(data));
     } catch (e) {
       throw Exception('复制文件失败: $e');
     }
@@ -291,64 +222,58 @@ class WebdavRepositoryImpl implements WebdavRepository {
 
   @override
   Future<int> getFileSize(String path) async {
-    _ensureConnected();
-
-    try {
-      final items = await _client!.readDir(path);
-      if (items.isEmpty) return 0;
-
-      return items.first.size ?? 0;
-    } catch (e) {
-      throw Exception('获取文件大小失败: $e');
-    }
+    final info = await getFileInfo(path);
+    return info?.size ?? 0;
   }
 
   @override
   Future<DateTime> getLastModified(String path) async {
-    _ensureConnected();
-
-    try {
-      final items = await _client!.readDir(path);
-      if (items.isEmpty) return DateTime.now();
-
-      return items.first.mTime ?? DateTime.now();
-    } catch (e) {
-      throw Exception('获取最后修改时间失败: $e');
-    }
+    final info = await getFileInfo(path);
+    return info?.lastModified ?? DateTime.now();
   }
 
   @override
   Future<bool> isDirectory(String path) async {
-    _ensureConnected();
-
-    try {
-      final items = await _client!.readDir(path);
-      if (items.isEmpty) return false;
-
-      return items.first.isDir ?? false;
-    } catch (e) {
-      return false;
-    }
+    final info = await getFileInfo(path);
+    return info?.isDirectory ?? false;
   }
 
   @override
   Future<bool> isFile(String path) async {
-    _ensureConnected();
-
-    try {
-      final items = await _client!.readDir(path);
-      if (items.isEmpty) return false;
-
-      return !(items.first.isDir ?? true);
-    } catch (e) {
-      return false;
-    }
+    final info = await getFileInfo(path);
+    return !(info?.isDirectory ?? true);
   }
 
-  /// 确保已连接到 WebDAV 服务器
   void _ensureConnected() {
     if (_client == null) {
       throw Exception('未连接到 WebDAV 服务器');
     }
+  }
+
+  @override
+  Future<List<WebdavFileInfo>> listDirectoryRecursive(String path) async {
+    final allFiles = <WebdavFileInfo>[];
+    final queue = <String>[path];
+
+    while (queue.isNotEmpty) {
+      final currentPath = queue.removeAt(0);
+      try {
+        final items = await listDirectory(currentPath);
+        for (final item in items) {
+          if (item.isDirectory) {
+            // Avoid infinite loops for '.' or self-references if any
+            if (item.path != currentPath) {
+              queue.add(item.path);
+            }
+          } else {
+            allFiles.add(item);
+          }
+        }
+      } catch (e) {
+        // Log error but continue trying to list other directories
+        print('Failed to list directory $currentPath: $e');
+      }
+    }
+    return allFiles;
   }
 }

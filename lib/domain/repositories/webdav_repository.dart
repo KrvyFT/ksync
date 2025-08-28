@@ -82,4 +82,7 @@ abstract class WebdavRepository {
 
   /// 检查是否为文件
   Future<bool> isFile(String path);
+
+  /// 递归列出目录内容
+  Future<List<WebdavFileInfo>> listDirectoryRecursive(String path);
 }

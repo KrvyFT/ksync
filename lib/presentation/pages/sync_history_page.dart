@@ -250,8 +250,7 @@ class _SyncHistoryPageState extends State<SyncHistoryPage> {
                 _buildDetailRow('结束时间', _formatDateTime(syncLog.endTime!)),
               if (syncLog.duration != null)
                 _buildDetailRow('耗时', _formatDuration(syncLog.duration!)),
-              _buildDetailRow('成功文件', '${syncLog.filesSynced}'),
-              _buildDetailRow('失败文件', '${syncLog.filesFailed}'),
+
               _buildDetailRow(
                   '成功率', '${(syncLog.successRate * 100).toStringAsFixed(1)}%'),
               if (syncLog.errorMessages.isNotEmpty) ...[
@@ -279,7 +278,7 @@ class _SyncHistoryPageState extends State<SyncHistoryPage> {
                 ...syncLog.syncedFiles.map((file) => Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
-                        '• $file',
+                        '• ${_getFileName(file)}',
                         style: const TextStyle(color: Colors.green),
                       ),
                     )),
@@ -294,7 +293,7 @@ class _SyncHistoryPageState extends State<SyncHistoryPage> {
                 ...syncLog.failedFiles.entries.map((entry) => Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
-                        '• ${entry.key}: ${entry.value}',
+                        '• ${_getFileName(entry.key)}: ${entry.value}',
                         style: const TextStyle(color: Colors.red),
                       ),
                     )),
@@ -331,5 +330,13 @@ class _SyncHistoryPageState extends State<SyncHistoryPage> {
         ],
       ),
     );
+  }
+
+  String _getFileName(String path) {
+    try {
+      return path.split('/').last;
+    } catch (e) {
+      return path;
+    }
   }
 }

@@ -26,6 +26,12 @@ class SyncLogModel extends HiveObject {
   @HiveField(6)
   final List<String> errorMessages;
 
+  @HiveField(7)
+  final List<String> syncedFiles;
+
+  @HiveField(8)
+  final Map<String, String> failedFiles;
+
   SyncLogModel({
     required this.jobId,
     required this.startTime,
@@ -34,6 +40,8 @@ class SyncLogModel extends HiveObject {
     required this.filesSynced,
     required this.filesFailed,
     required this.errorMessages,
+    required this.syncedFiles,
+    required this.failedFiles,
   });
 
   /// 从实体创建模型
@@ -46,6 +54,8 @@ class SyncLogModel extends HiveObject {
       filesSynced: entity.filesSynced,
       filesFailed: entity.filesFailed,
       errorMessages: entity.errorMessages,
+      syncedFiles: entity.syncedFiles,
+      failedFiles: entity.failedFiles,
     );
   }
 
@@ -59,6 +69,8 @@ class SyncLogModel extends HiveObject {
       filesSynced: filesSynced,
       filesFailed: filesFailed,
       errorMessages: errorMessages,
+      syncedFiles: syncedFiles,
+      failedFiles: failedFiles,
     );
   }
 
@@ -77,6 +89,8 @@ class SyncLogModel extends HiveObject {
       filesSynced: json['filesSynced'] as int,
       filesFailed: json['filesFailed'] as int,
       errorMessages: List<String>.from(json['errorMessages'] as List),
+      syncedFiles: List<String>.from(json['syncedFiles'] as List? ?? []),
+      failedFiles: Map<String, String>.from(json['failedFiles'] as Map? ?? {}),
     );
   }
 
@@ -90,6 +104,8 @@ class SyncLogModel extends HiveObject {
       'filesSynced': filesSynced,
       'filesFailed': filesFailed,
       'errorMessages': errorMessages,
+      'syncedFiles': syncedFiles,
+      'failedFiles': failedFiles,
     };
   }
 }

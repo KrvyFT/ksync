@@ -19,7 +19,20 @@ class HomePage extends StatelessWidget {
         title: const Text('WebDAV 同步工具'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: '同步历史',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SyncHistoryPage(),
+                ),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.settings),
+            tooltip: '设置',
             onPressed: () {
               Navigator.push(
                 context,
@@ -68,25 +81,7 @@ class HomePage extends StatelessWidget {
 
                   const SizedBox(height: 16),
 
-                  // 同步历史按钮
-                  Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.history),
-                      title: const Text('同步历史'),
-                      subtitle: const Text('查看历史同步记录'),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const SyncHistoryPage(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
 
-                  const SizedBox(height: 16),
 
                   // 状态信息
                   if (state is SyncSuccess) ...[
