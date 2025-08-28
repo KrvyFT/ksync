@@ -62,7 +62,7 @@ class WebDavSyncApp extends StatelessWidget {
           }
 
           return MaterialApp(
-            title: 'WebDAV 同步工具',
+            title: 'KSync',
             debugShowCheckedModeBanner: false,
             theme: ThemeData(
               useMaterial3: true,

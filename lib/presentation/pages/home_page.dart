@@ -16,7 +16,7 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('WebDAV 同步工具'),
+        title: const Text('KSync'),
         actions: [
           IconButton(
             icon: const Icon(Icons.history),
