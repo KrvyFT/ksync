@@ -1,18 +1,23 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
+import 'package:flutter/services.dart';
 import 'package:chewie/chewie.dart';
+import 'package:video_player/video_player.dart';
+import '../../domain/repositories/webdav_repository.dart'; // To get WebdavFileInfo
 
+// --- Main Page Widget ---
 class MediaViewerPage extends StatefulWidget {
-  final String filePath;
-  final String fileUrl;
+  final List<WebdavFileInfo> mediaFiles;
+  final int initialIndex;
+  final String webdavUrl;
   final String username;
   final String password;
 
   const MediaViewerPage({
     super.key,
-    required this.filePath,
-    required this.fileUrl,
+    required this.mediaFiles,
+    required this.initialIndex,
+    required this.webdavUrl,
     required this.username,
     required this.password,
   });
@@ -22,44 +27,170 @@ class MediaViewerPage extends StatefulWidget {
 }
 
 class _MediaViewerPageState extends State<MediaViewerPage> {
+  late PageController _pageController;
+  late ValueNotifier<int> _currentPageNotifier;
+  bool _isUiVisible = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: widget.initialIndex);
+    _currentPageNotifier = ValueNotifier<int>(widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _currentPageNotifier.dispose();
+    // Ensure the system UI is visible when we leave.
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
+        overlays: SystemUiOverlay.values);
+    super.dispose();
+  }
+
+  void _toggleUiVisibility() {
+    setState(() {
+      _isUiVisible = !_isUiVisible;
+      if (_isUiVisible) {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
+            overlays: SystemUiOverlay.values);
+      } else {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            PageView.builder(
+              controller: _pageController,
+              itemCount: widget.mediaFiles.length,
+              onPageChanged: (index) {
+                _currentPageNotifier.value = index;
+              },
+              itemBuilder: (context, index) {
+                final fileInfo = widget.mediaFiles[index];
+                return MediaItemViewer(
+                  key: ValueKey(fileInfo.path), // Important for state management
+                  fileInfo: fileInfo,
+                  webdavUrl: widget.webdavUrl,
+                  username: widget.username,
+                  password: widget.password,
+                  isUiVisible: _isUiVisible,
+                  onTap: _toggleUiVisibility,
+                );
+              },
+            ),
+            // --- UI Overlay ---
+            if (_isUiVisible)
+              Column(
+                children: [
+                  AppBar(
+                    backgroundColor: Colors.black.withOpacity(0.5),
+                    title: ValueListenableBuilder<int>(
+                      valueListenable: _currentPageNotifier,
+                      builder: (context, value, child) {
+                        return Text(
+                          widget.mediaFiles[value].name,
+                          style: const TextStyle(fontSize: 16),
+                        );
+                      },
+                    ),
+                    leading: const BackButton(),
+                    actions: [
+                      IconButton(
+                        icon: const Icon(Icons.fullscreen),
+                        onPressed: _toggleUiVisibility,
+                        tooltip: 'Toggle Fullscreen',
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  Container(
+                    color: Colors.black.withOpacity(0.5),
+                    padding: const EdgeInsets.all(8.0),
+                    child: ValueListenableBuilder<int>(
+                       valueListenable: _currentPageNotifier,
+                       builder: (context, value, child) {
+                          return Text(
+                            '${value + 1} / ${widget.mediaFiles.length}',
+                            style: const TextStyle(color: Colors.white, fontSize: 16),
+                          );
+                       },
+                    ),
+                  )
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- Individual Media Item Viewer ---
+class MediaItemViewer extends StatefulWidget {
+  final WebdavFileInfo fileInfo;
+  final String webdavUrl;
+  final String username;
+  final String password;
+  final bool isUiVisible;
+  final VoidCallback onTap;
+
+  const MediaItemViewer({
+    super.key,
+    required this.fileInfo,
+    required this.webdavUrl,
+    required this.username,
+    required this.password,
+    required this.isUiVisible,
+    required this.onTap,
+  });
+
+  @override
+  _MediaItemViewerState createState() => _MediaItemViewerState();
+}
+
+class _MediaItemViewerState extends State<MediaItemViewer>
+    with AutomaticKeepAliveClientMixin {
   VideoPlayerController? _videoPlayerController;
   ChewieController? _chewieController;
-  Future<void>? _initializeVideoPlayerFuture;
   late final Map<String, String> _headers;
+  late final String _fileUrl;
+
+  @override
+  bool get wantKeepAlive => true; // Keep state when swiping
 
   @override
   void initState() {
     super.initState();
     _createAuthHeaders();
+    _fileUrl = Uri.encodeFull('${widget.webdavUrl}${widget.fileInfo.path}');
 
-    if (_isVideo(widget.filePath)) {
+    if (_isVideo(widget.fileInfo.path)) {
       _videoPlayerController = VideoPlayerController.networkUrl(
-        Uri.parse(widget.fileUrl),
+        Uri.parse(_fileUrl),
         httpHeaders: _headers,
       );
-      // We create a future here and use a FutureBuilder in the build method
-      // to handle the asynchronous initialization.
-      _initializeVideoPlayerFuture =
-          _videoPlayerController!.initialize().then((_) {
-        // Once the controller is initialized, create the Chewie controller
-        // and rebuild the widget.
-        setState(() {
-          _chewieController = ChewieController(
-            videoPlayerController: _videoPlayerController!,
-            autoPlay: true,
-            looping: false,
-          );
-        });
-      });
+      _chewieController = ChewieController(
+        videoPlayerController: _videoPlayerController!,
+        autoPlay: false, // Don't autoplay when swiping
+        looping: false,
+        placeholder: const Center(child: CircularProgressIndicator()),
+        // Chewie has its own fullscreen logic
+      );
     }
   }
 
   void _createAuthHeaders() {
     final credentials = '${widget.username}:${widget.password}';
     final encodedCredentials = base64.encode(utf8.encode(credentials));
-    _headers = {
-      'Authorization': 'Basic $encodedCredentials',
-    };
+    _headers = {'Authorization': 'Basic $encodedCredentials'};
   }
 
   @override
@@ -81,62 +212,50 @@ class _MediaViewerPageState extends State<MediaViewerPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: Text(widget.filePath.split('/').last),
-      ),
-      body: Center(
+    super.build(context); // Needed for AutomaticKeepAliveClientMixin
+    return GestureDetector(
+      onTap: () {
+        // Only allow tapping to exit fullscreen, not to enter it.
+        if (!widget.isUiVisible) {
+          widget.onTap();
+        }
+      },
+      child: Center(
         child: _buildMediaWidget(),
       ),
     );
   }
 
   Widget _buildMediaWidget() {
-    if (_isImage(widget.filePath)) {
-      // For images, we can directly use the headers.
-      return Image.network(
-        widget.fileUrl,
-        headers: _headers,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Center(
-            child: CircularProgressIndicator(
+    if (_isImage(widget.fileInfo.path)) {
+      return InteractiveViewer(
+        panEnabled: true,
+        minScale: 1.0,
+        maxScale: 4.0,
+        child: Image.network(
+          _fileUrl,
+          headers: _headers,
+          fit: BoxFit.contain,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Center(
+                child: CircularProgressIndicator(
               value: loadingProgress.expectedTotalBytes != null
                   ? loadingProgress.cumulativeBytesLoaded /
                       loadingProgress.expectedTotalBytes!
                   : null,
-            ),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
-          return const Center(
-              child:
-                  Text('Failed to load image.', style: TextStyle(color: Colors.white)));
-        },
+            ));
+          },
+          errorBuilder: (context, error, stackTrace) {
+            return const Center(
+                child:
+                    Text('Failed to load image.', style: TextStyle(color: Colors.white)));
+          },
+        ),
       );
-    } else if (_isVideo(widget.filePath)) {
-      // For videos, use a FutureBuilder to show a loading indicator
-      // while the controller is initializing.
-      return FutureBuilder(
-        future: _initializeVideoPlayerFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done) {
-            if (snapshot.hasError || _chewieController == null) {
-              return const Center(
-                  child: Text('Failed to load video.',
-                      style: TextStyle(color: Colors.white)));
-            }
-            // If the video is initialized, display it
-            return Chewie(controller: _chewieController!);
-          } else {
-            // Otherwise, display a loading indicator.
-            return const Center(child: CircularProgressIndicator());
-          }
-        },
-      );
+    } else if (_isVideo(widget.fileInfo.path)) {
+      return Chewie(controller: _chewieController!);
     }
-    return const Text('Unsupported file type',
-        style: TextStyle(color: Colors.white));
+    return const Text('Unsupported file type', style: TextStyle(color: Colors.white));
   }
 }

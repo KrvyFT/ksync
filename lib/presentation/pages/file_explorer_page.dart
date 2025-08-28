@@ -112,19 +112,38 @@ class FileExplorerPage extends StatelessWidget {
   void _handleFileTap(BuildContext context, file) async {
     if (_isMediaFile(file.path)) {
       try {
-        final settingsRepo = await GetIt.instance.getAsync<SyncSettingsRepository>();
+        // Get the current list of all files from the BLoC state
+        final currentState = BlocProvider.of<FileExplorerBloc>(context).state;
+        if (currentState is! FileExplorerLoaded) return;
+
+        // Filter for media files and find the initial index
+        final mediaFiles = currentState.files
+            .where((f) => !f.isDirectory && _isMediaFile(f.path))
+            .toList();
+        final initialIndex = mediaFiles.indexOf(file);
+
+        if (initialIndex == -1) {
+           ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not find the selected file.')),
+          );
+          return;
+        }
+
+        final settingsRepo =
+            await GetIt.instance.getAsync<SyncSettingsRepository>();
         final settings = await settingsRepo.getSyncSettings();
         final password = await settingsRepo.getPassword();
 
-        if (settings.isWebdavConfigured && password != null && settings.username != null) {
-          // Note: This might not handle all edge cases for URL encoding, but works for many servers.
-          final fileUrl = Uri.encodeFull('${settings.webdavUrl}${file.path}');
+        if (settings.isWebdavConfigured &&
+            password != null &&
+            settings.username != null) {
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => MediaViewerPage(
-                filePath: file.path,
-                fileUrl: fileUrl,
+                mediaFiles: mediaFiles,
+                initialIndex: initialIndex,
+                webdavUrl: settings.webdavUrl!,
                 username: settings.username!,
                 password: password,
               ),
@@ -132,7 +151,9 @@ class FileExplorerPage extends StatelessWidget {
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('WebDAV is not configured or username/password is missing.')),
+            const SnackBar(
+                content: Text(
+                    'WebDAV is not configured or username/password is missing.')),
           );
         }
       } catch (e) {
