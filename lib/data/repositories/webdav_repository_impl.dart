@@ -1,5 +1,4 @@
 import 'dart:io' as io;
-import 'dart:typed_data' show Uint8List;
 import 'package:webdav_client/webdav_client.dart' as wd;
 import 'package:path/path.dart' as p;
 import 'dart:async';
@@ -37,7 +36,7 @@ class WebdavRepositoryImpl implements WebdavRepository {
       _currentUrl = null;
       _currentUsername = null;
       _currentPassword = null;
-      throw Exception('连接 WebDAV 服务器失败: $e');
+      rethrow;
     }
   }
 
@@ -75,7 +74,7 @@ class WebdavRepositoryImpl implements WebdavRepository {
               ))
           .toList();
     } catch (e) {
-      throw Exception('列出目录失败: $e');
+      rethrow;
     }
   }
 
@@ -85,7 +84,7 @@ class WebdavRepositoryImpl implements WebdavRepository {
     try {
       await _client!.mkdir(path);
     } catch (e) {
-      throw Exception('创建目录失败: $e');
+      rethrow;
     }
   }
 
@@ -107,7 +106,7 @@ class WebdavRepositoryImpl implements WebdavRepository {
         }
       }
     } catch (e) {
-      throw Exception('递归创建目录失败: $e');
+      rethrow;
     }
   }
 
@@ -127,17 +126,35 @@ class WebdavRepositoryImpl implements WebdavRepository {
       if (remoteDir.isNotEmpty && remoteDir != '/' && remoteDir != '.') {
         await createDirectoryRecursive(remoteDir);
       }
-      try {
-        // 尝试删除远程文件，这可以隐式地解锁文件
-        await _client!.remove(remotePath);
-      } catch (e) {
-        // 如果文件不存在或删除失败，我们忽略错误并继续尝试上传
+
+      final remoteFileExists = await exists(remotePath);
+      if (remoteFileExists) {
+        // File exists, use lock-write-unlock
+        String? lockToken;
+        try {
+          lockToken = await _client!.lock(remotePath);
+          if (lockToken == null) {
+            // If locking fails, fallback to simple write, but this may fail
+            // depending on the server's strictness.
+            await _client!.writeFromFile(localPath, remotePath,
+                onProgress: onProgress);
+          } else {
+            await _client!.writeFromFile(localPath, remotePath,
+                lockToken: lockToken, onProgress: onProgress);
+          }
+        } finally {
+          if (lockToken != null) {
+            await _client!.unlock(remotePath, lockToken);
+          }
+        }
+      } else {
+        // File does not exist, just write it
+        await _client!
+            .writeFromFile(localPath, remotePath, onProgress: onProgress);
       }
-      await _client!
-          .writeFromFile(localPath, remotePath, onProgress: onProgress);
     } catch (e) {
       print('Upload failed for $localPath -> $remotePath. Error: $e');
-      throw Exception('上传文件失败: $e');
+      rethrow;
     }
   }
 
@@ -158,7 +175,7 @@ class WebdavRepositoryImpl implements WebdavRepository {
       final f = io.File(localPath);
       await f.writeAsBytes(bytes);
     } catch (e) {
-      throw Exception('下载文件失败: $e');
+      rethrow;
     }
   }
 
@@ -168,7 +185,7 @@ class WebdavRepositoryImpl implements WebdavRepository {
     try {
       await _client!.remove(path);
     } catch (e) {
-      throw Exception('删除失败: $e');
+      rethrow;
     }
   }
 
@@ -176,8 +193,7 @@ class WebdavRepositoryImpl implements WebdavRepository {
   Future<bool> exists(String path) async {
     _ensureConnected();
     try {
-      // readDir is a reliable way to check for existence in v1.2.2
-      await _client!.readDir(path);
+      await _client!.readProps(path);
       return true;
     } catch (e) {
       return false;
@@ -188,9 +204,7 @@ class WebdavRepositoryImpl implements WebdavRepository {
   Future<WebdavFileInfo?> getFileInfo(String path) async {
     _ensureConnected();
     try {
-      final items = await _client!.readDir(path);
-      if (items.isEmpty) return null;
-      final item = items.first;
+      final item = await _client!.readProps(path);
       return WebdavFileInfo(
         path: item.path ?? '',
         name: item.name ?? '',
@@ -207,11 +221,9 @@ class WebdavRepositoryImpl implements WebdavRepository {
   Future<void> move(String sourcePath, String destinationPath) async {
     _ensureConnected();
     try {
-      // v1.2.2 doesn't have a reliable move, so we copy then delete
-      await copy(sourcePath, destinationPath);
-      await delete(sourcePath);
+      await _client!.rename(sourcePath, destinationPath, true);
     } catch (e) {
-      throw Exception('移动文件失败: $e');
+      rethrow;
     }
   }
 
@@ -219,10 +231,9 @@ class WebdavRepositoryImpl implements WebdavRepository {
   Future<void> copy(String sourcePath, String destinationPath) async {
     _ensureConnected();
     try {
-      final data = await _client!.read(sourcePath);
-      await _client!.write(destinationPath, Uint8List.fromList(data));
+      await _client!.copy(sourcePath, destinationPath, true);
     } catch (e) {
-      throw Exception('复制文件失败: $e');
+      rethrow;
     }
   }
 
