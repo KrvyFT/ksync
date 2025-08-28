@@ -257,7 +257,7 @@ class SyncBloc extends Bloc<SyncEvent, SyncState> {
       emit(SyncSettingsLoaded(settings));
 
       // 在加载设置后，也需要调度任务
-      await SyncScheduler.schedulePeriodicSync(settings);
+      await SyncScheduler.scheduleSync(settings);
     } catch (e) {
       emit(SyncFailure(
         error: '加载设置失败: $e',
@@ -273,7 +273,7 @@ class SyncBloc extends Bloc<SyncEvent, SyncState> {
       await settingsRepository.updateSyncSettings(event.settings);
 
       // 更新调度
-      await SyncScheduler.schedulePeriodicSync(event.settings);
+      await SyncScheduler.scheduleSync(event.settings);
 
       emit(SyncSettingsLoaded(event.settings));
     } catch (e) {

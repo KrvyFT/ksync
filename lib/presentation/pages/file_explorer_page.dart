@@ -1,16 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
+import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 
 import '../../domain/repositories/sync_settings_repository.dart';
 import '../blocs/file_explorer_bloc.dart';
 import 'media_viewer_page.dart';
+import '../../domain/repositories/webdav_repository.dart'; // Import WebdavFileInfo
 
-class FileExplorerPage extends StatelessWidget {
+class FileExplorerPage extends StatefulWidget {
   const FileExplorerPage({super.key});
 
   @override
+  State<FileExplorerPage> createState() => _FileExplorerPageState();
+}
+
+class _FileExplorerPageState extends State<FileExplorerPage> {
+  bool _isGridView = false;
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
@@ -21,14 +29,11 @@ class FileExplorerPage extends StatelessWidget {
             return RefreshIndicator(
               onRefresh: () async {
                 final bloc = context.read<FileExplorerBloc>();
-                // Only allow refresh if the state is Loaded or Error
                 if (state is FileExplorerLoaded) {
                   bloc.add(NavigateToPath(state.currentPath, forceRefresh: true));
                 } else if (state is FileExplorerError) {
-                  // If there was an error, retry the initial path
                   bloc.add(const NavigateToPath('/', forceRefresh: true));
                 }
-                // We need to wait for the state to change
                 await bloc.stream.firstWhere((s) => s is! FileExplorerLoading);
               },
               child: CustomScrollView(
@@ -36,6 +41,18 @@ class FileExplorerPage extends StatelessWidget {
                   SliverAppBar.medium(
                     title: Text(_getTitle(state)),
                     leading: _buildLeading(context, state),
+                    actions: [
+                      if (state is FileExplorerLoaded && state.files.isNotEmpty)
+                        IconButton(
+                          icon: Icon(_isGridView ? Icons.view_list_outlined : Icons.grid_view_outlined),
+                          tooltip: 'Toggle View',
+                          onPressed: () {
+                            setState(() {
+                              _isGridView = !_isGridView;
+                            });
+                          },
+                        ),
+                    ],
                     floating: true,
                     snap: true,
                   ),
@@ -47,7 +64,6 @@ class FileExplorerPage extends StatelessWidget {
         ),
         floatingActionButton: FloatingActionButton(
           onPressed: () {
-            // TODO: Implement file upload logic
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Upload feature coming soon!')),
             );
@@ -78,7 +94,6 @@ class FileExplorerPage extends StatelessWidget {
         },
       );
     }
-    // On root, show a close button instead of back
     return const CloseButton();
   }
 
@@ -93,7 +108,7 @@ class FileExplorerPage extends StatelessWidget {
           context: context,
           icon: Icons.cloud_off,
           message: state.message,
-          onRetry: () => context.read<FileExplorerBloc>().add(const NavigateToPath('/')),
+          onRetry: () => context.read<FileExplorerBloc>().add(const NavigateToPath('/', forceRefresh: true)),
         ),
       );
     } else if (state is FileExplorerLoaded) {
@@ -106,35 +121,9 @@ class FileExplorerPage extends StatelessWidget {
           ),
         );
       }
-      return SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final file = state.files[index];
-            return ListTile(
-              leading: Icon(
-                file.isDirectory ? Icons.folder_outlined : _getFileIcon(file.name),
-              ),
-              title: Text(
-                file.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Text(
-                file.isDirectory ? 'Folder' : _formatSize(file.size),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              onTap: () {
-                if (file.isDirectory) {
-                  context.read<FileExplorerBloc>().add(NavigateToPath(file.path));
-                } else {
-                  _handleFileTap(context, file);
-                }
-              },
-            );
-          },
-          childCount: state.files.length,
-        ),
-      );
+      return _isGridView
+          ? _buildGridView(context, state.files)
+          : _buildListView(context, state.files);
     }
     return SliverFillRemaining(
       child: _buildInfoState(
@@ -144,22 +133,55 @@ class FileExplorerPage extends StatelessWidget {
       ),
     );
   }
-  
-  IconData _getFileIcon(String fileName) {
-    final extension = p.extension(fileName).toLowerCase();
-    if (['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'].contains(extension)) {
-      return Icons.image_outlined;
+
+  Widget _buildListView(BuildContext context, List<WebdavFileInfo> files) {
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final file = files[index];
+            return _FileListItem(
+              file: file,
+              onTap: () => _onFileTap(context, file),
+            );
+          },
+          childCount: files.length,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGridView(BuildContext context, List<WebdavFileInfo> files) {
+    return SliverPadding(
+      padding: const EdgeInsets.all(12.0),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 200.0,
+          mainAxisSpacing: 12.0,
+          crossAxisSpacing: 12.0,
+          childAspectRatio: 0.9,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final file = files[index];
+            return _FileGridItem(
+              file: file,
+              onTap: () => _onFileTap(context, file),
+            );
+          },
+          childCount: files.length,
+        ),
+      ),
+    );
+  }
+
+  void _onFileTap(BuildContext context, WebdavFileInfo file) {
+    if (file.isDirectory) {
+      context.read<FileExplorerBloc>().add(NavigateToPath(file.path));
+    } else {
+      _handleFileTap(context, file);
     }
-    if (['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.flv'].contains(extension)) {
-      return Icons.video_library_outlined;
-    }
-    if (['.mp3', '.wav', '.aac', '.flac'].contains(extension)) {
-      return Icons.music_note_outlined;
-    }
-    if (['.zip', '.rar', '.7z', '.tar'].contains(extension)) {
-      return Icons.archive_outlined;
-    }
-    return Icons.insert_drive_file_outlined;
   }
 
   Widget _buildInfoState({
@@ -192,8 +214,8 @@ class FileExplorerPage extends StatelessWidget {
       ),
     );
   }
-
-  void _handleFileTap(BuildContext context, file) async {
+  
+  void _handleFileTap(BuildContext context, WebdavFileInfo file) async {
     if (_isMediaFile(file.path)) {
       try {
         final currentState = BlocProvider.of<FileExplorerBloc>(context).state;
@@ -257,13 +279,156 @@ class FileExplorerPage extends StatelessWidget {
     return imageExtensions.contains(extension) ||
         videoExtensions.contains(extension);
   }
+}
 
-  String _formatSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(2)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+// --- Helper Widgets ---
+
+class _FileListItem extends StatelessWidget {
+  const _FileListItem({required this.file, this.onTap});
+
+  final WebdavFileInfo file;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isFolder = file.isDirectory;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8.0),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12.0),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            children: [
+              _FileIcon(file: file),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      file.name,
+                      style: theme.textTheme.bodyLarge,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isFolder
+                          ? 'Folder'
+                          : '${_formatSize(file.size)} • ${DateFormat.yMMMd().format(file.lastModified)}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
+}
+
+class _FileGridItem extends StatelessWidget {
+  const _FileGridItem({required this.file, this.onTap});
+  
+  final WebdavFileInfo file;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Center(
+                child: _FileIcon(file: file, size: 48),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                file.name,
+                style: theme.textTheme.bodyMedium,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FileIcon extends StatelessWidget {
+  const _FileIcon({required this.file, this.size = 40});
+
+  final WebdavFileInfo file;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final iconData = _getIconForFile(file);
+    final color = file.isDirectory
+        ? theme.colorScheme.primary
+        : theme.colorScheme.secondary;
+    
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8.0),
+      ),
+      child: Icon(iconData, color: color, size: size * 0.6),
+    );
+  }
+}
+
+// --- Utility Functions ---
+
+IconData _getIconForFile(WebdavFileInfo file) {
+  if (file.isDirectory) return Icons.folder_outlined;
+  final extension = p.extension(file.name).toLowerCase();
+  if (['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'].contains(extension)) {
+    return Icons.image_outlined;
+  }
+  if (['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.flv'].contains(extension)) {
+    return Icons.video_library_outlined;
+  }
+  if (['.mp3', '.wav', '.aac', '.flac'].contains(extension)) {
+    return Icons.music_note_outlined;
+  }
+  if (['.zip', '.rar', '.7z', '.tar'].contains(extension)) {
+    return Icons.archive_outlined;
+  }
+  if (['.pdf'].contains(extension)) {
+    return Icons.picture_as_pdf_outlined;
+  }
+  if (['.doc', '.docx', '.odt'].contains(extension)) {
+    return Icons.description_outlined;
+  }
+  return Icons.insert_drive_file_outlined;
+}
+
+String _formatSize(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  if (bytes < 1024 * 1024 * 1024) {
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
 }
