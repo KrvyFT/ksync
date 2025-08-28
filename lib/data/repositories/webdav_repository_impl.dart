@@ -127,6 +127,12 @@ class WebdavRepositoryImpl implements WebdavRepository {
       if (remoteDir.isNotEmpty && remoteDir != '/' && remoteDir != '.') {
         await createDirectoryRecursive(remoteDir);
       }
+      try {
+        // 尝试删除远程文件，这可以隐式地解锁文件
+        await _client!.remove(remotePath);
+      } catch (e) {
+        // 如果文件不存在或删除失败，我们忽略错误并继续尝试上传
+      }
       await _client!
           .writeFromFile(localPath, remotePath, onProgress: onProgress);
     } catch (e) {
