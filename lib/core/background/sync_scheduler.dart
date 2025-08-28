@@ -2,79 +2,61 @@ import 'package:workmanager/workmanager.dart';
 
 import '../../domain/entities/sync_settings.dart';
 import 'background_task_handler.dart';
+import '../utils/logging.dart';
 
-/// 同步调度器
 class SyncScheduler {
-  static const String _syncTaskName = 'webdav-sync-task';
-  static const String _syncTaskTag = 'syncJob';
-
-  /// 初始化 WorkManager
   static Future<void> initialize() async {
-    await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+    await Workmanager().initialize(
+      callbackDispatcher,
+      isInDebugMode: false, // Set to true for debugging background tasks
+    );
+    logger.info("SyncScheduler initialized with Workmanager.");
   }
 
-  /// 调度周期性同步任务
-  static Future<void> schedulePeriodicSync(SyncSettings settings) async {
-    if (!settings.canAutoSync) {
-      await cancelSync();
+  static Future<void> scheduleSync(SyncSettings settings) async {
+    if (settings.syncFrequency == SyncFrequency.manual) {
+      await cancelScheduledSync();
       return;
     }
 
-    final frequency = settings.syncFrequencyDuration;
-    if (frequency == null) {
-      await cancelSync();
-      return;
-    }
-
-    // 构建约束条件
-    final constraints = Constraints(
-      networkType: settings.syncOnlyOnWifi 
-          ? NetworkType.unmetered 
-          : NetworkType.connected,
-      requiresCharging: settings.syncOnlyWhenCharging,
-      requiresDeviceIdle: settings.syncOnlyWhenIdle,
-      requiresBatteryNotLow: settings.syncOnlyWhenBatteryNotLow,
-    );
-
-    // 注册周期性任务
+    final frequency = _getDurationForFrequency(settings.syncFrequency);
+    
+    // Using a periodic task. Workmanager handles constraints like network automatically.
     await Workmanager().registerPeriodicTask(
-      _syncTaskName,
-      _syncTaskTag,
+      "1", // A unique name for the task
+      backgroundSyncTask,
       frequency: frequency,
-      initialDelay: const Duration(minutes: 5),
-      constraints: constraints,
-      existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
+      // Constraints can be added here, for example:
+      // constraints: Constraints(
+      //   networkType: NetworkType.unmetered, // e.g., only on Wi-Fi
+      //   requiresCharging: true,
+      // ),
     );
+    logger.info("Scheduled periodic sync with frequency: $frequency");
   }
 
-  /// 调度一次性同步任务
-  static Future<void> scheduleOneTimeSync({
-    Duration delay = Duration.zero,
-    bool requiresCharging = false,
-    bool requiresWifi = true,
-  }) async {
-    final constraints = Constraints(
-      networkType: requiresWifi ? NetworkType.unmetered : NetworkType.connected,
-      requiresCharging: requiresCharging,
-    );
-
-    await Workmanager().registerOneOffTask(
-      '${_syncTaskName}_${DateTime.now().millisecondsSinceEpoch}',
-      _syncTaskTag,
-      initialDelay: delay,
-      constraints: constraints,
-    );
+  static Future<void> cancelScheduledSync() async {
+    await Workmanager().cancelByUniqueName("1");
+    logger.info("Cancelled all scheduled sync tasks.");
   }
 
-  /// 取消同步任务
-  static Future<void> cancelSync() async {
-    await Workmanager().cancelByUniqueName(_syncTaskName);
+  static Duration _getDurationForFrequency(SyncFrequency frequency) {
+    switch (frequency) {
+      case SyncFrequency.every15Minutes:
+        return const Duration(minutes: 15);
+      case SyncFrequency.every30Minutes:
+        return const Duration(minutes: 30);
+      case SyncFrequency.everyHour:
+        return const Duration(hours: 1);
+      case SyncFrequency.every2Hours:
+        return const Duration(hours: 2);
+      case SyncFrequency.every6Hours:
+        return const Duration(hours: 6);
+      case SyncFrequency.daily:
+        return const Duration(days: 1);
+      default:
+        // Default to a safe value (1 hour) if manual or other cases.
+        return const Duration(hours: 1);
+    }
   }
-
-  /// 取消所有同步任务
-  static Future<void> cancelAllSync() async {
-    await Workmanager().cancelAll();
-  }
-
-  // 新版插件未提供直接查询任务列表的 API，如需状态可自行持久化。
 }

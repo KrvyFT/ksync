@@ -9,6 +9,7 @@ import '../../domain/repositories/sync_settings_repository.dart';
 import '../../core/utils/permissions.dart';
 import 'log_viewer_page.dart';
 import 'file_explorer_page.dart';
+import '../../core/background/sync_scheduler.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -500,6 +501,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
       // 通知 BLoC 更新设置
       context.read<SyncBloc>().add(UpdateSyncSettings(_currentSettings!));
+
+      // 重新调度后台任务
+      await SyncScheduler.scheduleSync(_currentSettings!);
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
