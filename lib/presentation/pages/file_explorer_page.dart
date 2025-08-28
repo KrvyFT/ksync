@@ -18,16 +18,30 @@ class FileExplorerPage extends StatelessWidget {
       child: Scaffold(
         body: BlocBuilder<FileExplorerBloc, FileExplorerState>(
           builder: (context, state) {
-            return CustomScrollView(
-              slivers: [
-                SliverAppBar.medium(
-                  title: Text(_getTitle(state)),
-                  leading: _buildLeading(context, state),
-                  floating: true,
-                  snap: true,
-                ),
-                _buildBody(context, state),
-              ],
+            return RefreshIndicator(
+              onRefresh: () async {
+                final bloc = context.read<FileExplorerBloc>();
+                // Only allow refresh if the state is Loaded or Error
+                if (state is FileExplorerLoaded) {
+                  bloc.add(NavigateToPath(state.currentPath, forceRefresh: true));
+                } else if (state is FileExplorerError) {
+                  // If there was an error, retry the initial path
+                  bloc.add(const NavigateToPath('/', forceRefresh: true));
+                }
+                // We need to wait for the state to change
+                await bloc.stream.firstWhere((s) => s is! FileExplorerLoading);
+              },
+              child: CustomScrollView(
+                slivers: [
+                  SliverAppBar.medium(
+                    title: Text(_getTitle(state)),
+                    leading: _buildLeading(context, state),
+                    floating: true,
+                    snap: true,
+                  ),
+                  _buildBody(context, state),
+                ],
+              ),
             );
           },
         ),
