@@ -81,8 +81,6 @@ class HomePage extends StatelessWidget {
 
                   const SizedBox(height: 16),
 
-
-
                   // 状态信息
                   if (state is SyncSuccess) ...[
                     Card(
@@ -225,7 +223,7 @@ class _PermissionsBannerState extends State<_PermissionsBanner> {
   Future<void> _check() async {
     final ok = await PermissionsHelper.ensureStoragePermissions();
     // ignore: avoid_print
-    print('权限检查结果: $ok');
+    // print('权限检查结果: $ok');
     if (mounted) {
       setState(() => _granted = ok);
     }

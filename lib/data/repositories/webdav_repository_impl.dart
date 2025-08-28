@@ -136,8 +136,8 @@ class WebdavRepositoryImpl implements WebdavRepository {
           if (lockToken == null) {
             // If locking fails, fallback to simple write, but this may fail
             // depending on the server's strictness.
-            await _client!.writeFromFile(localPath, remotePath,
-                onProgress: onProgress);
+            await _client!
+                .writeFromFile(localPath, remotePath, onProgress: onProgress);
           } else {
             await _client!.writeFromFile(localPath, remotePath,
                 lockToken: lockToken, onProgress: onProgress);
@@ -153,7 +153,7 @@ class WebdavRepositoryImpl implements WebdavRepository {
             .writeFromFile(localPath, remotePath, onProgress: onProgress);
       }
     } catch (e) {
-      print('Upload failed for $localPath -> $remotePath. Error: $e');
+      // print('Upload failed for $localPath -> $remotePath. Error: $e');
       rethrow;
     }
   }
@@ -288,7 +288,7 @@ class WebdavRepositoryImpl implements WebdavRepository {
         }
       } catch (e) {
         // Log error but continue trying to list other directories
-        print('Failed to list directory $currentPath: $e');
+        // print('Failed to list directory $currentPath: $e');
       }
     }
     return allFiles;

@@ -17,7 +17,7 @@ void callbackDispatcher() {
           return false;
       }
     } catch (e) {
-      print('后台任务执行失败: $e');
+      // print('后台任务执行失败: $e');
       return false;
     }
   });
@@ -28,23 +28,23 @@ Future<bool> _handleSyncJob() async {
   try {
     // 初始化依赖注入
     await configureDependencies();
-    
+
     // 获取同步引擎用例
     final syncEngine = await getIt.getAsync<SyncEngineUseCase>();
-    
+
     // 执行同步
     final syncLog = await syncEngine.executeSync();
-    
+
     // 发送通知
     await _sendNotification(syncLog);
-    
+
     return syncLog.status == SyncStatus.success;
   } catch (e) {
-    print('同步任务执行失败: $e');
-    
+    // print('同步任务执行失败: $e');
+
     // 发送失败通知
     await _sendFailureNotification(e.toString());
-    
+
     return false;
   }
 }
@@ -52,7 +52,7 @@ Future<bool> _handleSyncJob() async {
 /// 发送同步完成通知
 Future<void> _sendNotification(SyncLog syncLog) async {
   final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-  
+
   // 初始化通知
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
   const iosSettings = DarwinInitializationSettings();
@@ -60,9 +60,9 @@ Future<void> _sendNotification(SyncLog syncLog) async {
     android: androidSettings,
     iOS: iosSettings,
   );
-  
+
   await flutterLocalNotificationsPlugin.initialize(initSettings);
-  
+
   // 创建通知
   const androidDetails = AndroidNotificationDetails(
     'sync_channel',
@@ -71,17 +71,17 @@ Future<void> _sendNotification(SyncLog syncLog) async {
     importance: Importance.low,
     priority: Priority.low,
   );
-  
+
   const iosDetails = DarwinNotificationDetails();
-  
+
   const details = NotificationDetails(
     android: androidDetails,
     iOS: iosDetails,
   );
-  
+
   String title;
   String body;
-  
+
   if (syncLog.status == SyncStatus.success) {
     title = '同步完成';
     body = '成功同步 ${syncLog.filesSynced} 个文件';
@@ -90,11 +90,10 @@ Future<void> _sendNotification(SyncLog syncLog) async {
     }
   } else {
     title = '同步失败';
-    body = syncLog.errorMessages.isNotEmpty 
-        ? syncLog.errorMessages.first 
-        : '未知错误';
+    body =
+        syncLog.errorMessages.isNotEmpty ? syncLog.errorMessages.first : '未知错误';
   }
-  
+
   await flutterLocalNotificationsPlugin.show(
     syncLog.hashCode,
     title,
@@ -106,7 +105,7 @@ Future<void> _sendNotification(SyncLog syncLog) async {
 /// 发送同步失败通知
 Future<void> _sendFailureNotification(String error) async {
   final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-  
+
   // 初始化通知
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
   const iosSettings = DarwinInitializationSettings();
@@ -114,9 +113,9 @@ Future<void> _sendFailureNotification(String error) async {
     android: androidSettings,
     iOS: iosSettings,
   );
-  
+
   await flutterLocalNotificationsPlugin.initialize(initSettings);
-  
+
   // 创建通知
   const androidDetails = AndroidNotificationDetails(
     'sync_channel',
@@ -125,14 +124,14 @@ Future<void> _sendFailureNotification(String error) async {
     importance: Importance.high,
     priority: Priority.high,
   );
-  
+
   const iosDetails = DarwinNotificationDetails();
-  
+
   const details = NotificationDetails(
     android: androidDetails,
     iOS: iosDetails,
   );
-  
+
   await flutterLocalNotificationsPlugin.show(
     DateTime.now().millisecondsSinceEpoch,
     '同步失败',

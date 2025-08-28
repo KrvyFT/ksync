@@ -327,7 +327,7 @@ class SyncEngineUseCase {
           deletedFilePaths.add(metadata.localPath);
         } catch (e) {
           // 记录错误但继续处理其他文件
-          print('删除远程文件失败: ${metadata.remotePath}, 错误: $e');
+          // print('删除远程文件失败: ${metadata.remotePath}, 错误: $e');
         }
       }
     }

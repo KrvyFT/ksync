@@ -8,7 +8,7 @@ class PermissionsHelper {
       Permission.notification,
     ].request();
 
-    print("权限获取状态： $statuses");
+    // print("权限获取状态： $statuses");
 
     final ok = (statuses[Permission.storage]?.isGranted ?? true) &&
         (statuses[Permission.manageExternalStorage]?.isGranted ?? true);
