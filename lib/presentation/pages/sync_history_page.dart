@@ -67,24 +67,27 @@ class _SyncHistoryPageState extends State<SyncHistoryPage> {
   }
 
   Widget _buildErrorWidget() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
+          Icon(
             Icons.error_outline,
             size: 64,
-            color: Colors.red,
+            color: colorScheme.error,
           ),
           const SizedBox(height: 16),
           Text(
             '加载失败',
-            style: Theme.of(context).textTheme.titleLarge,
+            style: textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
           Text(
             _error!,
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: textTheme.bodyMedium,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
@@ -98,24 +101,27 @@ class _SyncHistoryPageState extends State<SyncHistoryPage> {
   }
 
   Widget _buildEmptyWidget() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
+          Icon(
             Icons.history,
             size: 64,
-            color: Colors.grey,
+            color: colorScheme.onSurface.withOpacity(0.4),
           ),
           const SizedBox(height: 16),
           Text(
             '暂无同步记录',
-            style: Theme.of(context).textTheme.titleLarge,
+            style: textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
           Text(
             '开始同步后，这里将显示同步历史',
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: textTheme.bodyMedium,
             textAlign: TextAlign.center,
           ),
         ],
@@ -138,15 +144,24 @@ class _SyncHistoryPageState extends State<SyncHistoryPage> {
   }
 
   Widget _buildSyncLogItem(SyncLog syncLog) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(
+          color: colorScheme.outlineVariant,
+        ),
+        borderRadius: const BorderRadius.all(Radius.circular(12)),
+      ),
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
-        leading: _buildStatusIcon(syncLog.status),
+        leading: _buildStatusIcon(syncLog.status, colorScheme),
         title: Text(
           _getStatusText(syncLog.status),
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: _getStatusColor(syncLog.status),
+            color: _getStatusColor(syncLog.status, colorScheme),
           ),
         ),
         subtitle: Column(
@@ -169,26 +184,26 @@ class _SyncHistoryPageState extends State<SyncHistoryPage> {
     );
   }
 
-  Widget _buildStatusIcon(SyncStatus status) {
+  Widget _buildStatusIcon(SyncStatus status, ColorScheme colorScheme) {
     IconData iconData;
     Color color;
 
     switch (status) {
       case SyncStatus.success:
         iconData = Icons.check_circle;
-        color = Colors.green;
+        color = colorScheme.primary;
         break;
       case SyncStatus.failed:
         iconData = Icons.error;
-        color = Colors.red;
+        color = colorScheme.error;
         break;
       case SyncStatus.canceled:
         iconData = Icons.cancel;
-        color = Colors.orange;
+        color = colorScheme.tertiary;
         break;
       case SyncStatus.inProgress:
         iconData = Icons.sync;
-        color = Colors.blue;
+        color = colorScheme.secondary;
         break;
     }
 
@@ -208,16 +223,16 @@ class _SyncHistoryPageState extends State<SyncHistoryPage> {
     }
   }
 
-  Color _getStatusColor(SyncStatus status) {
+  Color _getStatusColor(SyncStatus status, ColorScheme colorScheme) {
     switch (status) {
       case SyncStatus.success:
-        return Colors.green;
+        return colorScheme.primary;
       case SyncStatus.failed:
-        return Colors.red;
+        return colorScheme.error;
       case SyncStatus.canceled:
-        return Colors.orange;
+        return colorScheme.tertiary;
       case SyncStatus.inProgress:
-        return Colors.blue;
+        return colorScheme.secondary;
     }
   }
 
@@ -235,6 +250,9 @@ class _SyncHistoryPageState extends State<SyncHistoryPage> {
   }
 
   void _showSyncLogDetails(SyncLog syncLog) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -255,46 +273,49 @@ class _SyncHistoryPageState extends State<SyncHistoryPage> {
                   '成功率', '${(syncLog.successRate * 100).toStringAsFixed(1)}%'),
               if (syncLog.errorMessages.isNotEmpty) ...[
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   '错误信息:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 ...syncLog.errorMessages.map((error) => Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
                         '• $error',
-                        style: const TextStyle(color: Colors.red),
+                        style: TextStyle(color: colorScheme.error),
                       ),
                     )),
               ],
               if (syncLog.syncedFiles.isNotEmpty) ...[
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   '成功文件:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 ...syncLog.syncedFiles.map((file) => Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
                         '• ${_getFileName(file)}',
-                        style: const TextStyle(color: Colors.green),
+                        style: TextStyle(color: colorScheme.primary),
                       ),
                     )),
               ],
               if (syncLog.failedFiles.isNotEmpty) ...[
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   '失败文件:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 ...syncLog.failedFiles.entries.map((entry) => Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
                         '• ${_getFileName(entry.key)}: ${entry.value}',
-                        style: const TextStyle(color: Colors.red),
+                        style: TextStyle(color: colorScheme.error),
                       ),
                     )),
               ],

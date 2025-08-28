@@ -7,6 +7,7 @@ import '../../domain/entities/sync_settings.dart';
 import '../../core/di/injection.dart';
 import '../../domain/repositories/sync_settings_repository.dart';
 import '../../core/utils/permissions.dart';
+import 'log_viewer_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -48,10 +49,14 @@ class _SettingsPageState extends State<SettingsPage> {
       final settingsRepository = await getIt.getAsync<SyncSettingsRepository>();
       final settings = await settingsRepository.getSyncSettings();
 
+      // 额外获取密码
+      final password = await settingsRepository.getPassword();
+
       setState(() {
         _currentSettings = settings;
         _webdavUrlController.text = settings.webdavUrl ?? '';
         _usernameController.text = settings.username ?? '';
+        _passwordController.text = password ?? '';
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -101,86 +106,77 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildWebdavSection() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'WebDAV 连接',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _webdavUrlController,
-              decoration: const InputDecoration(
-                labelText: '服务器地址',
-                hintText: 'https://your-webdav-server.com',
-                prefixIcon: Icon(Icons.link),
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return '请输入服务器地址';
-                }
-                final uri = Uri.tryParse(value);
-                if (uri == null || !uri.hasScheme) {
-                  return '请输入有效的 URL';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _usernameController,
-              decoration: const InputDecoration(
-                labelText: '用户名',
-                prefixIcon: Icon(Icons.person),
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return '请输入用户名';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _passwordController,
-              decoration: const InputDecoration(
-                labelText: '密码',
-                prefixIcon: Icon(Icons.lock),
-              ),
-              obscureText: true,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return '请输入密码';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _isTestingConnection ? null : _testConnection,
-                icon: _isTestingConnection
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.wifi_tethering),
-                label: Text(_isTestingConnection ? '测试中...' : '测试连接'),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildMaxConcurrentUploadsTile(),
-          ],
+    return _SettingsSection(
+      title: 'WebDAV 连接',
+      children: [
+        TextFormField(
+          controller: _webdavUrlController,
+          decoration: const InputDecoration(
+            labelText: '服务器地址',
+            hintText: 'https://your-webdav-server.com',
+            prefixIcon: Icon(Icons.link),
+          ),
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return '请输入服务器地址';
+            }
+            final uri = Uri.tryParse(value);
+            if (uri == null || !uri.hasScheme) {
+              return '请输入有效的 URL';
+            }
+            return null;
+          },
         ),
-      ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _usernameController,
+          decoration: const InputDecoration(
+            labelText: '用户名',
+            prefixIcon: Icon(Icons.person),
+          ),
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return '请输入用户名';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _passwordController,
+          decoration: const InputDecoration(
+            labelText: '密码',
+            prefixIcon: Icon(Icons.lock),
+          ),
+          obscureText: true,
+          validator: (value) {
+            // 允许密码为空，但不允许在已输入其他信息时为空
+            if (_webdavUrlController.text.isNotEmpty &&
+                _usernameController.text.isNotEmpty &&
+                (value == null || value.isEmpty)) {
+              return '请输入密码';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _isTestingConnection ? null : _testConnection,
+            icon: _isTestingConnection
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.wifi_tethering),
+            label: Text(_isTestingConnection ? '测试中...' : '测试连接'),
+          ),
+        ),
+        const SizedBox(height: 16),
+        _buildMaxConcurrentUploadsTile(),
+      ],
     );
   }
 
@@ -229,46 +225,29 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildSyncDirectoriesSection() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  '同步目录',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: _addSyncDirectory,
-                  icon: const Icon(Icons.add),
-                  label: const Text('添加'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (_currentSettings?.syncDirectories.isEmpty == true)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text(
-                    '未选择同步目录',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-              )
-            else
-              ...(_currentSettings?.syncDirectories
-                      .map((directory) => _buildDirectoryItem(directory)) ??
-                  []),
-          ],
-        ),
+    return _SettingsSection(
+      title: '同步目录',
+      action: TextButton.icon(
+        onPressed: _addSyncDirectory,
+        icon: const Icon(Icons.add),
+        label: const Text('添加'),
       ),
+      children: [
+        if (_currentSettings?.syncDirectories.isEmpty == true)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                '未选择同步目录',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+          )
+        else
+          ...(_currentSettings?.syncDirectories
+                  .map((directory) => _buildDirectoryItem(directory)) ??
+              []),
+      ],
     );
   }
 
@@ -288,137 +267,125 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildSyncOptionsSection() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '同步选项',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<SyncFrequency>(
-              value: _currentSettings?.syncFrequency ?? SyncFrequency.manual,
-              decoration: const InputDecoration(
-                labelText: '同步频率',
-                prefixIcon: Icon(Icons.schedule),
-              ),
-              items: SyncFrequency.values.map((frequency) {
-                return DropdownMenuItem(
-                  value: frequency,
-                  child: Text(_getFrequencyText(frequency)),
+    return _SettingsSection(
+      title: '同步选项',
+      children: [
+        DropdownButtonFormField<SyncFrequency>(
+          value: _currentSettings?.syncFrequency ?? SyncFrequency.manual,
+          decoration: const InputDecoration(
+            labelText: '同步频率',
+            prefixIcon: Icon(Icons.schedule),
+          ),
+          items: SyncFrequency.values.map((frequency) {
+            return DropdownMenuItem(
+              value: frequency,
+              child: Text(_getFrequencyText(frequency)),
+            );
+          }).toList(),
+          onChanged: (value) {
+            if (value != null) {
+              setState(() {
+                _currentSettings = _currentSettings?.copyWith(
+                  syncFrequency: value,
                 );
-              }).toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() {
-                    _currentSettings = _currentSettings?.copyWith(
-                      syncFrequency: value,
-                    );
-                  });
-                }
-              },
-            ),
-            const SizedBox(height: 16),
-            SwitchListTile(
-              title: const Text('仅在 Wi-Fi 下同步'),
-              subtitle: const Text('避免消耗移动数据'),
-              value: _currentSettings?.syncOnlyOnWifi ?? true,
-              onChanged: (value) {
-                setState(() {
-                  _currentSettings = _currentSettings?.copyWith(
-                    syncOnlyOnWifi: value,
-                  );
-                });
-              },
-            ),
-            SwitchListTile(
-              title: const Text('仅在充电时同步'),
-              subtitle: const Text('避免消耗电池'),
-              value: _currentSettings?.syncOnlyWhenCharging ?? false,
-              onChanged: (value) {
-                setState(() {
-                  _currentSettings = _currentSettings?.copyWith(
-                    syncOnlyWhenCharging: value,
-                  );
-                });
-              },
-            ),
-            SwitchListTile(
-              title: const Text('仅在设备空闲时同步'),
-              subtitle: const Text('避免影响使用体验'),
-              value: _currentSettings?.syncOnlyWhenIdle ?? false,
-              onChanged: (value) {
-                setState(() {
-                  _currentSettings = _currentSettings?.copyWith(
-                    syncOnlyWhenIdle: value,
-                  );
-                });
-              },
-            ),
-            SwitchListTile(
-              title: const Text('仅在电量充足时同步'),
-              subtitle: const Text('避免在电量低时同步'),
-              value: _currentSettings?.syncOnlyWhenBatteryNotLow ?? true,
-              onChanged: (value) {
-                setState(() {
-                  _currentSettings = _currentSettings?.copyWith(
-                    syncOnlyWhenBatteryNotLow: value,
-                  );
-                });
-              },
-            ),
-          ],
+              });
+            }
+          },
         ),
-      ),
+        const SizedBox(height: 16),
+        SwitchListTile(
+          title: const Text('仅在 Wi-Fi 下同步'),
+          subtitle: const Text('避免消耗移动数据'),
+          value: _currentSettings?.syncOnlyOnWifi ?? true,
+          onChanged: (value) {
+            setState(() {
+              _currentSettings = _currentSettings?.copyWith(
+                syncOnlyOnWifi: value,
+              );
+            });
+          },
+        ),
+        SwitchListTile(
+          title: const Text('仅在充电时同步'),
+          subtitle: const Text('避免消耗电池'),
+          value: _currentSettings?.syncOnlyWhenCharging ?? false,
+          onChanged: (value) {
+            setState(() {
+              _currentSettings = _currentSettings?.copyWith(
+                syncOnlyWhenCharging: value,
+              );
+            });
+          },
+        ),
+        SwitchListTile(
+          title: const Text('仅在设备空闲时同步'),
+          subtitle: const Text('避免影响使用体验'),
+          value: _currentSettings?.syncOnlyWhenIdle ?? false,
+          onChanged: (value) {
+            setState(() {
+              _currentSettings = _currentSettings?.copyWith(
+                syncOnlyWhenIdle: value,
+              );
+            });
+          },
+        ),
+        SwitchListTile(
+          title: const Text('仅在电量充足时同步'),
+          subtitle: const Text('避免在电量低时同步'),
+          value: _currentSettings?.syncOnlyWhenBatteryNotLow ?? true,
+          onChanged: (value) {
+            setState(() {
+              _currentSettings = _currentSettings?.copyWith(
+                syncOnlyWhenBatteryNotLow: value,
+              );
+            });
+          },
+        ),
+      ],
     );
   }
 
   Widget _buildAdvancedOptionsSection() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '高级选项',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 16),
-            SwitchListTile(
-              title: const Text('启用通知'),
-              subtitle: const Text('同步完成后发送通知'),
-              value: _currentSettings?.enableNotifications ?? true,
-              onChanged: (value) {
-                setState(() {
-                  _currentSettings = _currentSettings?.copyWith(
-                    enableNotifications: value,
-                  );
-                });
-              },
-            ),
-            SwitchListTile(
-              title: const Text('启用冲突解决'),
-              subtitle: const Text('自动处理文件冲突'),
-              value: _currentSettings?.enableConflictResolution ?? true,
-              onChanged: (value) {
-                setState(() {
-                  _currentSettings = _currentSettings?.copyWith(
-                    enableConflictResolution: value,
-                  );
-                });
-              },
-            ),
-          ],
+    return _SettingsSection(
+      title: '高级选项',
+      children: [
+        SwitchListTile(
+          title: const Text('启用通知'),
+          subtitle: const Text('同步完成后发送通知'),
+          value: _currentSettings?.enableNotifications ?? true,
+          onChanged: (value) {
+            setState(() {
+              _currentSettings = _currentSettings?.copyWith(
+                enableNotifications: value,
+              );
+            });
+          },
         ),
-      ),
+        SwitchListTile(
+          title: const Text('启用冲突解决'),
+          subtitle: const Text('自动处理文件冲突'),
+          value: _currentSettings?.enableConflictResolution ?? true,
+          onChanged: (value) {
+            setState(() {
+              _currentSettings = _currentSettings?.copyWith(
+                enableConflictResolution: value,
+              );
+            });
+          },
+        ),
+        const Divider(),
+        ListTile(
+          title: const Text('查看日志'),
+          subtitle: const Text('用于问题诊断'),
+          leading: const Icon(Icons.receipt_long),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const LogViewerPage()),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -556,5 +523,54 @@ class _SettingsPageState extends State<SettingsPage> {
       case SyncFrequency.manual:
         return '手动';
     }
+  }
+}
+
+class _SettingsSection extends StatelessWidget {
+  const _SettingsSection({
+    required this.title,
+    required this.children,
+    this.action,
+  });
+
+  final String title;
+  final List<Widget> children;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
+        borderRadius: const BorderRadius.all(Radius.circular(12)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  title,
+                  style: textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                if (action != null) action!,
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...children,
+          ],
+        ),
+      ),
+    );
   }
 }

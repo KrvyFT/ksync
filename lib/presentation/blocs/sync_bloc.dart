@@ -8,6 +8,7 @@ import '../../domain/usecases/sync_engine_usecase.dart';
 import '../../core/di/injection.dart';
 import '../../core/background/sync_scheduler.dart';
 import '../../domain/repositories/sync_settings_repository.dart';
+import '../../core/utils/logging.dart';
 
 // Events
 abstract class SyncEvent extends Equatable {
@@ -145,6 +146,7 @@ class SyncBloc extends Bloc<SyncEvent, SyncState> {
   }
 
   Future<void> _onStartSync(StartSync event, Emitter<SyncState> emit) async {
+    logger.info('Manual sync triggered from UI.');
     try {
       emit(const SyncLoading());
 
@@ -195,7 +197,8 @@ class SyncBloc extends Bloc<SyncEvent, SyncState> {
       );
 
       add(SyncCompleted(syncLog));
-    } catch (e) {
+    } catch (e, s) {
+      logger.error('Manual sync failed', e, s);
       final settingsRepository = await getIt.getAsync<SyncSettingsRepository>();
       final settings = await settingsRepository.getSyncSettings();
 
@@ -252,6 +255,9 @@ class SyncBloc extends Bloc<SyncEvent, SyncState> {
       final settingsRepository = await getIt.getAsync<SyncSettingsRepository>();
       final settings = await settingsRepository.getSyncSettings();
       emit(SyncSettingsLoaded(settings));
+
+      // 在加载设置后，也需要调度任务
+      await SyncScheduler.schedulePeriodicSync(settings);
     } catch (e) {
       emit(SyncFailure(
         error: '加载设置失败: $e',

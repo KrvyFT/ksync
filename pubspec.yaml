@@ -56,6 +56,9 @@ dependencies:
   # Value equality
   equatable: ^2.0.5
   async: ^2.13.0
+  dynamic_color: ^1.8.1
+  mime: ^2.0.0
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:

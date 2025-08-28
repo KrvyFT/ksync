@@ -23,7 +23,7 @@ class SyncStatusCard extends StatelessWidget {
               children: [
                 Icon(
                   _getStatusIcon(),
-                  color: _getStatusColor(),
+                  color: _getStatusColor(context),
                   size: 24,
                 ),
                 const SizedBox(width: 12),
@@ -56,18 +56,22 @@ class SyncStatusCard extends StatelessWidget {
   }
 
   IconData _getStatusIcon() {
-    if (state is SyncInProgress) {
+    final s = state;
+    if (s is SyncInProgress) {
       return Icons.sync;
-    } else if (state is SyncSuccess) {
-      return Icons.check_circle;
-    } else if (state is SyncFailure) {
-      return Icons.error;
-    } else if (state is SyncSettingsLoaded) {
-      final settings = (state as SyncSettingsLoaded).settings;
-      if (settings.canAutoSync) {
+    } else if (s is SyncSuccess) {
+      if (s.syncLog.filesFailed > 0) {
+        return Icons.warning_amber_rounded;
+      }
+      if (s.syncLog.filesSynced == 0 && s.syncLog.filesFailed == 0) {
         return Icons.cloud_done;
-      } else if (settings.isWebdavConfigured) {
-        return Icons.cloud_off;
+      }
+      return Icons.check_circle;
+    } else if (s is SyncFailure) {
+      return Icons.error;
+    } else if (s is SyncSettingsLoaded) {
+      if (s.settings.canAutoSync) {
+        return Icons.cloud_done;
       } else {
         return Icons.cloud_off;
       }
@@ -76,39 +80,49 @@ class SyncStatusCard extends StatelessWidget {
     }
   }
 
-  Color _getStatusColor() {
-    if (state is SyncInProgress) {
-      return Colors.blue;
-    } else if (state is SyncSuccess) {
-      return Colors.green;
-    } else if (state is SyncFailure) {
-      return Colors.red;
-    } else if (state is SyncSettingsLoaded) {
-      final settings = (state as SyncSettingsLoaded).settings;
-      if (settings.canAutoSync) {
-        return Colors.green;
-      } else if (settings.isWebdavConfigured) {
-        return Colors.orange;
+  Color _getStatusColor(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final s = state;
+    if (s is SyncInProgress) {
+      return colorScheme.secondary;
+    } else if (s is SyncSuccess) {
+      if (s.syncLog.filesFailed > 0) {
+        return colorScheme.tertiary;
+      }
+      return colorScheme.primary;
+    } else if (s is SyncFailure) {
+      return colorScheme.error;
+    } else if (s is SyncSettingsLoaded) {
+      if (s.settings.canAutoSync) {
+        return colorScheme.primary;
+      } else if (s.settings.isWebdavConfigured) {
+        return colorScheme.tertiary;
       } else {
-        return Colors.grey;
+        return colorScheme.onSurface.withOpacity(0.4);
       }
     } else {
-      return Colors.grey;
+      return colorScheme.onSurface.withOpacity(0.4);
     }
   }
 
   String _getStatusTitle() {
-    if (state is SyncInProgress) {
+    final s = state;
+    if (s is SyncInProgress) {
       return '正在同步';
-    } else if (state is SyncSuccess) {
+    } else if (s is SyncSuccess) {
+      if (s.syncLog.filesFailed > 0) {
+        return '部分同步完成';
+      }
+      if (s.syncLog.filesSynced == 0 && s.syncLog.filesFailed == 0) {
+        return '文件已是最新';
+      }
       return '同步完成';
-    } else if (state is SyncFailure) {
+    } else if (s is SyncFailure) {
       return '同步失败';
-    } else if (state is SyncSettingsLoaded) {
-      final settings = (state as SyncSettingsLoaded).settings;
-      if (settings.canAutoSync) {
+    } else if (s is SyncSettingsLoaded) {
+      if (s.settings.canAutoSync) {
         return '已配置自动同步';
-      } else if (settings.isWebdavConfigured) {
+      } else if (s.settings.isWebdavConfigured) {
         return 'WebDAV 已配置';
       } else {
         return '未配置';
@@ -119,17 +133,24 @@ class SyncStatusCard extends StatelessWidget {
   }
 
   String _getStatusSubtitle() {
-    if (state is SyncInProgress) {
+    final s = state;
+    if (s is SyncInProgress) {
       return '正在同步文件到 WebDAV 服务器';
-    } else if (state is SyncSuccess) {
-      return '文件同步成功';
-    } else if (state is SyncFailure) {
+    } else if (s is SyncSuccess) {
+      final log = s.syncLog;
+      if (log.filesFailed > 0) {
+        return '${log.filesSynced} 个文件成功, ${log.filesFailed} 个文件失败';
+      }
+      if (log.filesSynced == 0 && log.filesFailed == 0) {
+        return '本地与云端文件一致';
+      }
+      return '成功同步 ${log.filesSynced} 个文件';
+    } else if (s is SyncFailure) {
       return '同步过程中出现错误';
-    } else if (state is SyncSettingsLoaded) {
-      final settings = (state as SyncSettingsLoaded).settings;
-      if (settings.canAutoSync) {
+    } else if (s is SyncSettingsLoaded) {
+      if (s.settings.canAutoSync) {
         return '将按照设定频率自动同步';
-      } else if (settings.isWebdavConfigured) {
+      } else if (s.settings.isWebdavConfigured) {
         return '请选择同步目录并设置同步频率';
       } else {
         return '请先配置 WebDAV 连接信息';

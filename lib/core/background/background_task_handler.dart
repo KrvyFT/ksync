@@ -4,6 +4,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../di/injection.dart';
 import '../../domain/usecases/sync_engine_usecase.dart';
 import '../../domain/entities/sync_log.dart';
+import '../utils/logging.dart';
 
 /// 后台任务回调函数
 @pragma('vm:entry-point')
@@ -42,6 +43,9 @@ Future<bool> _handleSyncJob() async {
   } catch (e) {
     // print('同步任务执行失败: $e');
 
+    // 记录错误
+    logger.error('Background sync job failed', e);
+
     // 发送失败通知
     await _sendFailureNotification(e.toString());
 
@@ -49,93 +53,74 @@ Future<bool> _handleSyncJob() async {
   }
 }
 
-/// 发送同步完成通知
-Future<void> _sendNotification(SyncLog syncLog) async {
-  final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-
-  // 初始化通知
+Future<FlutterLocalNotificationsPlugin> _initializeNotifications() async {
+  final plugin = FlutterLocalNotificationsPlugin();
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
   const iosSettings = DarwinInitializationSettings();
   const initSettings = InitializationSettings(
     android: androidSettings,
     iOS: iosSettings,
   );
+  await plugin.initialize(initSettings);
+  return plugin;
+}
 
-  await flutterLocalNotificationsPlugin.initialize(initSettings);
+NotificationDetails _getNotificationDetails(bool isError) {
+  final importance = isError ? Importance.high : Importance.high;
+  final priority = isError ? Priority.high : Priority.high;
 
-  // 创建通知
-  const androidDetails = AndroidNotificationDetails(
+  final androidDetails = AndroidNotificationDetails(
     'sync_channel',
     '同步通知',
     channelDescription: 'WebDAV 同步状态通知',
-    importance: Importance.low,
-    priority: Priority.low,
+    importance: importance,
+    priority: priority,
   );
-
   const iosDetails = DarwinNotificationDetails();
+  return NotificationDetails(android: androidDetails, iOS: iosDetails);
+}
 
-  const details = NotificationDetails(
-    android: androidDetails,
-    iOS: iosDetails,
-  );
-
-  String title;
-  String body;
-
-  if (syncLog.status == SyncStatus.success) {
-    title = '同步完成';
-    body = '成功同步 ${syncLog.filesSynced} 个文件';
-    if (syncLog.filesFailed > 0) {
-      body += '，失败 ${syncLog.filesFailed} 个文件';
-    }
-  } else {
-    title = '同步失败';
-    body =
-        syncLog.errorMessages.isNotEmpty ? syncLog.errorMessages.first : '未知错误';
-  }
-
-  await flutterLocalNotificationsPlugin.show(
-    syncLog.hashCode,
+Future<void> _showNotification(
+    {required String title, required String body, bool isError = false}) async {
+  final plugin = await _initializeNotifications();
+  final details = _getNotificationDetails(isError);
+  await plugin.show(
+    DateTime.now().millisecondsSinceEpoch, // Use timestamp for unique ID
     title,
     body,
     details,
   );
 }
 
+/// 发送同步完成通知
+Future<void> _sendNotification(SyncLog syncLog) async {
+  String title;
+  String body;
+  bool isError = false;
+
+  if (syncLog.status == SyncStatus.success) {
+    if (syncLog.filesFailed > 0) {
+      title = '部分同步完成';
+      body = '成功 ${syncLog.filesSynced}，失败 ${syncLog.filesFailed}';
+      isError = true; // 部分失败也算是一种需要用户关注的状态
+    } else if (syncLog.filesSynced == 0) {
+      title = '文件已是最新';
+      body = '本地与云端文件一致';
+    } else {
+      title = '同步完成';
+      body = '成功同步 ${syncLog.filesSynced} 个文件';
+    }
+  } else {
+    title = '同步失败';
+    body =
+        syncLog.errorMessages.isNotEmpty ? syncLog.errorMessages.first : '未知错误';
+    isError = true;
+  }
+
+  await _showNotification(title: title, body: body, isError: isError);
+}
+
 /// 发送同步失败通知
 Future<void> _sendFailureNotification(String error) async {
-  final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-
-  // 初始化通知
-  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const iosSettings = DarwinInitializationSettings();
-  const initSettings = InitializationSettings(
-    android: androidSettings,
-    iOS: iosSettings,
-  );
-
-  await flutterLocalNotificationsPlugin.initialize(initSettings);
-
-  // 创建通知
-  const androidDetails = AndroidNotificationDetails(
-    'sync_channel',
-    '同步通知',
-    channelDescription: 'WebDAV 同步状态通知',
-    importance: Importance.high,
-    priority: Priority.high,
-  );
-
-  const iosDetails = DarwinNotificationDetails();
-
-  const details = NotificationDetails(
-    android: androidDetails,
-    iOS: iosDetails,
-  );
-
-  await flutterLocalNotificationsPlugin.show(
-    DateTime.now().millisecondsSinceEpoch,
-    '同步失败',
-    error,
-    details,
-  );
+  await _showNotification(title: '同步失败', body: error, isError: true);
 }
