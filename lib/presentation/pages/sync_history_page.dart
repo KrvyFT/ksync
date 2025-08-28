@@ -269,6 +269,36 @@ class _SyncHistoryPageState extends State<SyncHistoryPage> {
                       ),
                     )),
               ],
+              if (syncLog.syncedFiles.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Text(
+                  '成功文件:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                ...syncLog.syncedFiles.map((file) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        '• $file',
+                        style: const TextStyle(color: Colors.green),
+                      ),
+                    )),
+              ],
+              if (syncLog.failedFiles.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Text(
+                  '失败文件:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                ...syncLog.failedFiles.entries.map((entry) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        '• ${entry.key}: ${entry.value}',
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    )),
+              ],
             ],
           ),
         ),

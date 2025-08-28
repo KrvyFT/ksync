@@ -176,8 +176,54 @@ class _SettingsPageState extends State<SettingsPage> {
                 label: Text(_isTestingConnection ? '测试中...' : '测试连接'),
               ),
             ),
+            const SizedBox(height: 16),
+            _buildMaxConcurrentUploadsTile(),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildMaxConcurrentUploadsTile() {
+    return ListTile(
+      title: const Text('最大并发上传数'),
+      subtitle: Text('同时上传的最大文件数'),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.remove),
+            onPressed: () {
+              if (_currentSettings != null &&
+                  _currentSettings!.maxConcurrentUploads > 1) {
+                setState(() {
+                  _currentSettings = _currentSettings!.copyWith(
+                    maxConcurrentUploads:
+                        _currentSettings!.maxConcurrentUploads - 1,
+                  );
+                });
+              }
+            },
+          ),
+          Text(
+            _currentSettings?.maxConcurrentUploads.toString() ?? '3',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () {
+              if (_currentSettings != null &&
+                  _currentSettings!.maxConcurrentUploads < 10) {
+                setState(() {
+                  _currentSettings = _currentSettings!.copyWith(
+                    maxConcurrentUploads:
+                        _currentSettings!.maxConcurrentUploads + 1,
+                  );
+                });
+              }
+            },
+          ),
+        ],
       ),
     );
   }

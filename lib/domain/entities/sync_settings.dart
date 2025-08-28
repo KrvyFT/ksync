@@ -25,6 +25,7 @@ class SyncSettings extends Equatable {
   final List<String> excludePatterns;
   final bool enableNotifications;
   final bool enableConflictResolution;
+  final int maxConcurrentUploads;
 
   const SyncSettings({
     this.webdavUrl,
@@ -38,6 +39,7 @@ class SyncSettings extends Equatable {
     this.excludePatterns = const [],
     this.enableNotifications = true,
     this.enableConflictResolution = true,
+    this.maxConcurrentUploads = 3,
   });
 
   /// 检查是否已配置 WebDAV 连接
@@ -63,6 +65,7 @@ class SyncSettings extends Equatable {
         excludePatterns,
         enableNotifications,
         enableConflictResolution,
+        maxConcurrentUploads,
       ];
 
   /// 创建副本并更新指定字段
@@ -78,6 +81,7 @@ class SyncSettings extends Equatable {
     List<String>? excludePatterns,
     bool? enableNotifications,
     bool? enableConflictResolution,
+    int? maxConcurrentUploads,
   }) {
     return SyncSettings(
       webdavUrl: webdavUrl ?? this.webdavUrl,
@@ -91,6 +95,7 @@ class SyncSettings extends Equatable {
       excludePatterns: excludePatterns ?? this.excludePatterns,
       enableNotifications: enableNotifications ?? this.enableNotifications,
       enableConflictResolution: enableConflictResolution ?? this.enableConflictResolution,
+      maxConcurrentUploads: maxConcurrentUploads ?? this.maxConcurrentUploads,
     );
   }
 
@@ -111,6 +116,7 @@ class SyncSettings extends Equatable {
       excludePatterns: List<String>.from(json['excludePatterns'] as List? ?? []),
       enableNotifications: json['enableNotifications'] as bool? ?? true,
       enableConflictResolution: json['enableConflictResolution'] as bool? ?? true,
+      maxConcurrentUploads: json['maxConcurrentUploads'] as int? ?? 3,
     );
   }
 
@@ -128,6 +134,7 @@ class SyncSettings extends Equatable {
       'excludePatterns': excludePatterns,
       'enableNotifications': enableNotifications,
       'enableConflictResolution': enableConflictResolution,
+      'maxConcurrentUploads': maxConcurrentUploads,
     };
   }
 

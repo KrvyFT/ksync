@@ -38,11 +38,15 @@ class SyncProgressCard extends StatelessWidget {
             const SizedBox(height: 16),
             
             // 进度条
-            LinearProgressIndicator(
-              value: progress.progressPercentage,
-              backgroundColor: Colors.grey.shade200,
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
-            ),
+            if (progress.uploadingFiles.isNotEmpty)
+              ..._buildUploadingFiles(context)
+            else
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Text('正在准备同步...'),
+                ),
+              ),
             
             const SizedBox(height: 12),
             
@@ -66,29 +70,37 @@ class SyncProgressCard extends StatelessWidget {
                 ),
               ],
             ),
-            
-            const SizedBox(height: 12),
-            
-            // 当前文件
-            if (progress.currentFile.isNotEmpty) ...[
-              Text(
-                '当前文件:',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _getFileName(progress.currentFile),
-                style: Theme.of(context).textTheme.bodySmall,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
           ],
         ),
       ),
     );
+  }
+
+  List<Widget> _buildUploadingFiles(BuildContext context) {
+    final widgets = <Widget>[];
+    for (final entry in progress.uploadingFiles.entries) {
+      widgets.add(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '正在上传: ${_getFileName(entry.key)}',
+              style: Theme.of(context).textTheme.bodySmall,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            LinearProgressIndicator(
+              value: entry.value,
+              backgroundColor: Colors.grey.shade200,
+              valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      );
+    }
+    return widgets;
   }
 
   Widget _buildProgressInfo(String label, String value, Color color) {

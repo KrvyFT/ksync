@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as path;
 
+
 import '../entities/file_metadata.dart';
 import '../entities/sync_log.dart';
 import '../entities/sync_settings.dart';
@@ -24,6 +25,7 @@ class SyncProgress {
   final int filesFailed;
   final SyncStatus status;
   final String? errorMessage;
+  final Map<String, double> uploadingFiles;
 
   const SyncProgress({
     required this.currentFile,
@@ -33,7 +35,30 @@ class SyncProgress {
     required this.filesFailed,
     required this.status,
     this.errorMessage,
+    this.uploadingFiles = const {},
   });
+
+  SyncProgress copyWith({
+    String? currentFile,
+    int? currentFileIndex,
+    int? totalFiles,
+    int? filesSynced,
+    int? filesFailed,
+    SyncStatus? status,
+    String? errorMessage,
+    Map<String, double>? uploadingFiles,
+  }) {
+    return SyncProgress(
+      currentFile: currentFile ?? this.currentFile,
+      currentFileIndex: currentFileIndex ?? this.currentFileIndex,
+      totalFiles: totalFiles ?? this.totalFiles,
+      filesSynced: filesSynced ?? this.filesSynced,
+      filesFailed: filesFailed ?? this.filesFailed,
+      status: status ?? this.status,
+      errorMessage: errorMessage ?? this.errorMessage,
+      uploadingFiles: uploadingFiles ?? this.uploadingFiles,
+    );
+  }
 
   /// 获取进度百分比
   double get progressPercentage {
@@ -114,6 +139,8 @@ class SyncEngineUseCase {
         filesSynced: result.filesSynced,
         filesFailed: result.filesFailed,
         errorMessages: result.errorMessages,
+        syncedFiles: result.syncedFiles,
+        failedFiles: result.failedFiles,
       );
 
       await _syncLogRepository.updateSyncLog(updatedSyncLog);
@@ -143,8 +170,13 @@ class SyncEngineUseCase {
   }) async {
     final allFiles = <String>[];
     final errorMessages = <String>[];
-    int filesSynced = 0;
-    int filesFailed = 0;
+    final syncedFiles = <String>[];
+    final failedFiles = <String, String>{};
+    final uploadingFiles = <String, double>{};
+
+    int filesSyncedCount = 0;
+    int filesFailedCount = 0;
+    int filesProcessed = 0;
 
     // 扫描所有同步目录
     for (final directory in settings.syncDirectories) {
@@ -157,39 +189,75 @@ class SyncEngineUseCase {
     }
 
     // 处理删除的文件
-    final deletedFiles = await _handleDeletedFiles();
-    filesSynced += deletedFiles;
+    final deletedFilePaths = await _handleDeletedFiles();
+    filesSyncedCount += deletedFilePaths.length;
+    syncedFiles.addAll(deletedFilePaths);
 
-    // 处理新增和修改的文件
-    for (int i = 0; i < allFiles.length; i++) {
-      final file = allFiles[i];
+    void reportProgress() {
+      onProgress?.call(SyncProgress(
+        currentFile: '', // Not ideal, maybe show multiple files
+        currentFileIndex: filesProcessed,
+        totalFiles: allFiles.length,
+        filesSynced: filesSyncedCount,
+        filesFailed: filesFailedCount,
+        status: SyncStatus.inProgress,
+        uploadingFiles: Map.from(uploadingFiles),
+      ));
+    }
 
+    final fileQueue = List<String>.from(allFiles);
+    final activeFutures = <Future>{};
+    final maxConcurrency = settings.maxConcurrentUploads;
+
+    Future<void> processFile(String file) async {
       try {
-        onProgress?.call(SyncProgress(
-          currentFile: file,
-          currentFileIndex: i,
-          totalFiles: allFiles.length,
-          filesSynced: filesSynced,
-          filesFailed: filesFailed,
-          status: SyncStatus.inProgress,
-        ));
-
-        final result = await _syncFile(file, settings);
+        final result = await _syncFile(
+          file,
+          settings,
+          onUploadProgress: (bytesSent, totalBytes) {
+            uploadingFiles[file] = bytesSent / totalBytes;
+            reportProgress();
+          },
+        );
         if (result) {
-          filesSynced++;
+          filesSyncedCount++;
+          syncedFiles.add(file);
         } else {
-          filesFailed++;
+          filesFailedCount++;
+          failedFiles[file] = '未知错误';
         }
       } catch (e) {
-        filesFailed++;
+        filesFailedCount++;
+        failedFiles[file] = e.toString();
         errorMessages.add('同步文件 $file 失败: $e');
+      } finally {
+        filesProcessed++;
+        uploadingFiles.remove(file);
+        reportProgress();
+      }
+    }
+
+    while (fileQueue.isNotEmpty || activeFutures.isNotEmpty) {
+      while (activeFutures.length < maxConcurrency && fileQueue.isNotEmpty) {
+        final fileToProcess = fileQueue.removeAt(0);
+        final future = processFile(fileToProcess);
+        activeFutures.add(future);
+        future.whenComplete(() {
+          activeFutures.remove(future);
+        });
+      }
+
+      if (activeFutures.isNotEmpty) {
+        await Future.any(activeFutures);
       }
     }
 
     return SyncResult(
-      filesSynced: filesSynced,
-      filesFailed: filesFailed,
+      filesSynced: filesSyncedCount,
+      filesFailed: filesFailedCount,
       errorMessages: errorMessages,
+      syncedFiles: syncedFiles,
+      failedFiles: failedFiles,
     );
   }
 
@@ -221,11 +289,19 @@ class SyncEngineUseCase {
 
   /// 检查文件是否应该被排除
   bool _shouldExclude(String filePath, List<String> excludePatterns) {
+    // 默认规则：排除所有以 '.' 开头的文件和文件夹（dotfiles）
+    // 我们检查路径的每个部分，以正确处理像 'folder/.hiddenfile' 这样的情况
+    if (filePath.split(path.separator).any((part) => part.startsWith('.'))) {
+      return true;
+    }
+
+    // 检查用户自定义的排除规则
     for (final pattern in excludePatterns) {
       if (_matchesPattern(filePath, pattern)) {
         return true;
       }
     }
+
     return false;
   }
 
@@ -240,10 +316,10 @@ class SyncEngineUseCase {
     return filePath.contains(pattern);
   }
 
-  /// 处理已删除的文件
-  Future<int> _handleDeletedFiles() async {
+  /// 处理已删除的文件. 返回已删除文件的路径列表.
+  Future<List<String>> _handleDeletedFiles() async {
     final allMetadata = await _fileMetadataRepository.getAllFileMetadata();
-    int deletedCount = 0;
+    final deletedFilePaths = <String>[];
 
     for (final metadata in allMetadata) {
       final file = File(metadata.localPath);
@@ -255,7 +331,7 @@ class SyncEngineUseCase {
           // 删除本地元数据
           await _fileMetadataRepository.deleteFileMetadata(metadata.localPath);
 
-          deletedCount++;
+          deletedFilePaths.add(metadata.localPath);
         } catch (e) {
           // 记录错误但继续处理其他文件
           print('删除远程文件失败: ${metadata.remotePath}, 错误: $e');
@@ -263,11 +339,15 @@ class SyncEngineUseCase {
       }
     }
 
-    return deletedCount;
+    return deletedFilePaths;
   }
 
   /// 同步单个文件
-  Future<bool> _syncFile(String localPath, SyncSettings settings) async {
+  Future<bool> _syncFile(
+    String localPath,
+    SyncSettings settings, {
+    UploadProgressCallback? onUploadProgress,
+  }) async {
     final file = File(localPath);
     if (!await file.exists()) {
       return false;
@@ -296,34 +376,29 @@ class SyncEngineUseCase {
       }
     }
 
-    try {
-      // 确保远程目录存在
-      final remoteDir = path.dirname(remotePath);
-      await _webdavRepository.createDirectoryRecursive(remoteDir);
+    // 确保远程目录存在
+    final remoteDir = path.dirname(remotePath);
+    await _webdavRepository.createDirectoryRecursive(remoteDir);
 
-      // 上传文件
-      await _webdavRepository.uploadFile(localPath, remotePath, null);
+    // 上传文件
+    await _webdavRepository.uploadFile(localPath, remotePath, onUploadProgress);
 
-      // 更新或创建元数据
-      final newMetadata = FileMetadata(
-        localPath: localPath,
-        remotePath: remotePath,
-        size: fileStat.size,
-        lastModifiedTimestamp: fileStat.modified.millisecondsSinceEpoch,
-        contentHash: contentHash,
-      );
+    // 更新或创建元数据
+    final newMetadata = FileMetadata(
+      localPath: localPath,
+      remotePath: remotePath,
+      size: fileStat.size,
+      lastModifiedTimestamp: fileStat.modified.millisecondsSinceEpoch,
+      contentHash: contentHash,
+    );
 
-      if (existingMetadata != null) {
-        await _fileMetadataRepository.updateFileMetadata(newMetadata);
-      } else {
-        await _fileMetadataRepository.saveFileMetadata(newMetadata);
-      }
-
-      return true;
-    } catch (e) {
-      print('同步文件失败: $localPath, 错误: $e');
-      return false;
+    if (existingMetadata != null) {
+      await _fileMetadataRepository.updateFileMetadata(newMetadata);
+    } else {
+      await _fileMetadataRepository.saveFileMetadata(newMetadata);
     }
+
+    return true;
   }
 
   /// 计算文件哈希值
@@ -355,10 +430,14 @@ class SyncResult {
   final int filesSynced;
   final int filesFailed;
   final List<String> errorMessages;
+  final List<String> syncedFiles;
+  final Map<String, String> failedFiles;
 
   const SyncResult({
     required this.filesSynced,
     required this.filesFailed,
     required this.errorMessages,
+    this.syncedFiles = const [],
+    this.failedFiles = const {},
   });
 }

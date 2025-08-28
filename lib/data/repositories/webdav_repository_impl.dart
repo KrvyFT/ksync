@@ -2,7 +2,9 @@ import 'dart:io' as io;
 import 'dart:typed_data' show Uint8List;
 import 'package:webdav_client/webdav_client.dart' as wd;
 import 'package:path/path.dart' as p;
-import 'dart:typed_data';
+import 'package:http/http.dart' as http;
+import 'dart:async';
+import 'dart:convert';
 
 import '../../domain/repositories/webdav_repository.dart';
 
@@ -140,16 +142,52 @@ class WebdavRepositoryImpl implements WebdavRepository {
         throw Exception('本地文件不存在: $localPath');
       }
 
-      // 确保远程目录存在
-      final remoteDir = p.dirname(remotePath);
-      if (remoteDir.isNotEmpty && remoteDir != '.') {
-        await createDirectoryRecursive(remoteDir);
-      }
+      final fileLength = await file.length();
+      final remoteUrl = Uri.parse(_currentUrl!).replace(path: remotePath);
 
-      // 上传文件
-      await _client!.writeFromFile(localPath, remotePath);
+      // 手动构建 Basic Auth
+      final basicAuth = base64Encode(utf8.encode('$_currentUsername:$_currentPassword'));
+
+      final request = http.StreamedRequest('PUT', remoteUrl);
+      request.headers['Authorization'] = 'Basic $basicAuth';
+      request.headers['Content-Length'] = fileLength.toString();
+
+      int bytesSent = 0;
+      final fileStream = file.openRead();
+
+      final stream = fileStream.transform<List<int>>(
+        StreamTransformer.fromHandlers(
+          handleData: (data, sink) {
+            bytesSent += data.length;
+            onProgress?.call(bytesSent, fileLength);
+            sink.add(data);
+          },
+        ),
+      );
+
+      request.contentLength = fileLength;
+
+      final client = http.Client();
+      try {
+        // Pipe the stream to the request sink. This doesn't block.
+        stream.pipe(request.sink);
+
+        // Send the request and wait for the response.
+        final response = await client.send(request);
+
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          // Success, drain the stream to prevent resource leaks.
+          await response.stream.drain();
+        } else {
+          final body = await response.stream.bytesToString();
+          throw Exception(
+              '上传文件失败: ${response.statusCode} ${response.reasonPhrase}. Body: $body');
+        }
+      } finally {
+        client.close();
+      }
     } catch (e) {
-      throw Exception('上传文件失败: $e');
+      throw Exception('上传文件��败: $e');
     }
   }
 

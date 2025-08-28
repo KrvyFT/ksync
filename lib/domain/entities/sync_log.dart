@@ -29,6 +29,8 @@ class SyncLog extends Equatable {
   final int filesSynced;
   final int filesFailed;
   final List<String> errorMessages;
+  final List<String> syncedFiles;
+  final Map<String, String> failedFiles;
 
   const SyncLog({
     required this.jobId,
@@ -38,6 +40,8 @@ class SyncLog extends Equatable {
     required this.filesSynced,
     required this.filesFailed,
     required this.errorMessages,
+    this.syncedFiles = const [],
+    this.failedFiles = const {},
   });
 
   /// 获取同步持续时间
@@ -64,6 +68,8 @@ class SyncLog extends Equatable {
         filesSynced,
         filesFailed,
         errorMessages,
+        syncedFiles,
+        failedFiles,
       ];
 
   /// 创建副本并更新指定字段
@@ -75,6 +81,8 @@ class SyncLog extends Equatable {
     int? filesSynced,
     int? filesFailed,
     List<String>? errorMessages,
+    List<String>? syncedFiles,
+    Map<String, String>? failedFiles,
   }) {
     return SyncLog(
       jobId: jobId ?? this.jobId,
@@ -84,6 +92,8 @@ class SyncLog extends Equatable {
       filesSynced: filesSynced ?? this.filesSynced,
       filesFailed: filesFailed ?? this.filesFailed,
       errorMessages: errorMessages ?? this.errorMessages,
+      syncedFiles: syncedFiles ?? this.syncedFiles,
+      failedFiles: failedFiles ?? this.failedFiles,
     );
   }
 
@@ -102,6 +112,8 @@ class SyncLog extends Equatable {
       filesSynced: json['filesSynced'] as int,
       filesFailed: json['filesFailed'] as int,
       errorMessages: List<String>.from(json['errorMessages'] as List),
+      syncedFiles: List<String>.from(json['syncedFiles'] as List? ?? []),
+      failedFiles: Map<String, String>.from(json['failedFiles'] as Map? ?? {}),
     );
   }
 
@@ -115,6 +127,8 @@ class SyncLog extends Equatable {
       'filesSynced': filesSynced,
       'filesFailed': filesFailed,
       'errorMessages': errorMessages,
+      'syncedFiles': syncedFiles,
+      'failedFiles': failedFiles,
     };
   }
 }
